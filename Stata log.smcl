@@ -1,0 +1,1708 @@
+{smcl}
+{com}{sf}{ul off}{txt}{.-}
+      name:  {res}<unnamed>
+       {txt}log:  {res}/Users/wyt/Desktop/Stata log.smcl
+  {txt}log type:  {res}smcl
+ {txt}opened on:  {res} 3 May 2026, 11:54:28
+
+{com}. do "/Users/wyt/Documents/EC331 Code/Analysis.do"
+{txt}
+{com}. clear
+{txt}
+{com}. 
+. local temp_dir "temp"
+{txt}
+{com}. capture mkdir "`temp_dir'"
+{txt}
+{com}. 
+. capture program drop prep_long
+{txt}
+{com}. program define prep_long
+{txt}  1{com}.     syntax, idvars(string) [post_year(integer 2021)]
+{txt}  2{com}. 
+.     * Convert the wide monthly price columns exported from Python into a transaction-month panel.
+.     reshape long price_, i(`idvars') j(year_month) string
+{txt}  3{com}.     rename price_ price
+{txt}  4{com}. 
+.     gen year  = real(substr(year_month, 1, 4))
+{txt}  5{com}.     gen month = real(substr(year_month, 6, 2))
+{txt}  6{com}. 
+.     * Collapse year-specific housing-supply controls to one column aligned with each observation year.
+.     gen additional_dwellings = .
+{txt}  7{com}.     forvalues y = 2016/2025 {c -(}
+{txt}  8{com}.         capture replace additional_dwellings = additional_dwellings_`y' if year == `y'
+{txt}  9{com}.     {c )-}
+{txt} 10{com}.     capture drop additional_dwellings_*
+{txt} 11{com}. 
+.     gen post         = (year >= `post_year')
+{txt} 12{com}.     gen treated_post = treated * post
+{txt} 13{com}. 
+.     drop if missing(price)
+{txt} 14{com}.     gen log_price = ln(price)
+{txt} 15{com}. 
+.     encode PROPERTY_TYPE,         gen(property_type_enc)
+{txt} 16{com}.     encode BUILT_FORM,            gen(built_form_enc)
+{txt} 17{com}.     encode CONSTRUCTION_AGE_BAND, gen(construction_age_enc)
+{txt} 18{com}.     encode TENURE,                gen(tenure_enc)
+{txt} 19{com}. end
+{txt}
+{com}. 
+. * ============================================================================
+. * PREPARE DATA
+. * ============================================================================
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. * Build base long dataset (reused by most regressions)
+. quietly {c -(}
+{txt}
+{com}. 
+. * Build a broader long dataset before postcode support filtering.
+. * This feeds the OA FE and station x ring FE checks, which apply their own support rules later.
+. quietly {c -(}
+{txt}
+{com}. 
+. * Count full-sample estimation observations before any support filter is applied.
+. quietly {c -(}
+{txt}
+{com}. 
+. * ============================================================================
+. * BASELINE: Treatment vs Ring (Postcode FE)
+. * ============================================================================
+. * Table 3. Baseline Difference-in-Differences results.
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 60 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 16 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    42,865
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}   4757{txt}){col 67}= {res}      5.36
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5143
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4466
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0135
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     4,758{txt}{col 51}Root MSE{col 67}= {res}    0.3786
+
+{txt}{ralign 98:(Std. err. adjusted for {res:4,758} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0280581{col 46}{space 2} .0100149{col 57}{space 1}    2.80{col 66}{space 3}0.005{col 74}{space 4} .0084244{col 87}{space 3} .0476919
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 2.74e-06{col 46}{space 2} 7.93e-06{col 57}{space 1}    0.35{col 66}{space 3}0.729{col 74}{space 4}-.0000128{col 87}{space 3} .0000183
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .1184641{col 46}{space 2} .1020685{col 57}{space 1}    1.16{col 66}{space 3}0.246{col 74}{space 4}-.0816375{col 87}{space 3} .3185657
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.1001706{col 46}{space 2} .1086337{col 57}{space 1}   -0.92{col 66}{space 3}0.357{col 74}{space 4} -.313143{col 87}{space 3} .1128018
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .0774632{col 46}{space 2} .1035544{col 57}{space 1}    0.75{col 66}{space 3}0.454{col 74}{space 4}-.1255514{col 87}{space 3} .2804778
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0106562{col 46}{space 2} .0162826{col 57}{space 1}    0.65{col 66}{space 3}0.513{col 74}{space 4}-.0212653{col 87}{space 3} .0425776
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0334986{col 46}{space 2} .0216673{col 57}{space 1}   -1.55{col 66}{space 3}0.122{col 74}{space 4}-.0759766{col 87}{space 3} .0089793
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0134288{col 46}{space 2} .0144968{col 57}{space 1}    0.93{col 66}{space 3}0.354{col 74}{space 4}-.0149917{col 87}{space 3} .0418492
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0049983{col 46}{space 2} .0148586{col 57}{space 1}    0.34{col 66}{space 3}0.737{col 74}{space 4}-.0241314{col 87}{space 3}  .034128
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2} -.023286{col 46}{space 2} .0401958{col 57}{space 1}   -0.58{col 66}{space 3}0.562{col 74}{space 4}-.1020885{col 87}{space 3} .0555165
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0188098{col 46}{space 2} .0157172{col 57}{space 1}   -1.20{col 66}{space 3}0.231{col 74}{space 4}-.0496227{col 87}{space 3} .0120031
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0098193{col 46}{space 2} .0134306{col 57}{space 1}    0.73{col 66}{space 3}0.465{col 74}{space 4}-.0165109{col 87}{space 3} .0361495
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0011682{col 46}{space 2} .0003355{col 57}{space 1}    3.48{col 66}{space 3}0.001{col 74}{space 4} .0005105{col 87}{space 3} .0018259
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0391567{col 46}{space 2} .0064879{col 57}{space 1}    6.04{col 66}{space 3}0.000{col 74}{space 4} .0264374{col 87}{space 3} .0518759
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0081152{col 46}{space 2} .0129042{col 57}{space 1}   -0.63{col 66}{space 3}0.529{col 74}{space 4}-.0334134{col 87}{space 3}  .017183
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0292195{col 46}{space 2}   .01873{col 57}{space 1}   -1.56{col 66}{space 3}0.119{col 74}{space 4} -.065939{col 87}{space 3}    .0075
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0106209{col 46}{space 2} .0149848{col 57}{space 1}   -0.71{col 66}{space 3}0.478{col 74}{space 4} -.039998{col 87}{space 3} .0187562
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0308891{col 46}{space 2} .0187295{col 57}{space 1}   -1.65{col 66}{space 3}0.099{col 74}{space 4}-.0676076{col 87}{space 3} .0058293
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0141108{col 46}{space 2} .0157342{col 57}{space 1}   -0.90{col 66}{space 3}0.370{col 74}{space 4}-.0449571{col 87}{space 3} .0167355
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2} -.007393{col 46}{space 2} .0172647{col 57}{space 1}   -0.43{col 66}{space 3}0.669{col 74}{space 4}-.0412399{col 87}{space 3} .0264538
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0027623{col 46}{space 2} .0170374{col 57}{space 1}   -0.16{col 66}{space 3}0.871{col 74}{space 4}-.0361635{col 87}{space 3} .0306389
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0115035{col 46}{space 2} .0177024{col 57}{space 1}    0.65{col 66}{space 3}0.516{col 74}{space 4}-.0232015{col 87}{space 3} .0462084
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2} .0085179{col 46}{space 2} .0383516{col 57}{space 1}    0.22{col 66}{space 3}0.824{col 74}{space 4} -.066669{col 87}{space 3} .0837048
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} .0008271{col 46}{space 2} .0186639{col 57}{space 1}    0.04{col 66}{space 3}0.965{col 74}{space 4}-.0357628{col 87}{space 3}  .037417
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0228406{col 46}{space 2} .0229569{col 57}{space 1}    0.99{col 66}{space 3}0.320{col 74}{space 4}-.0221656{col 87}{space 3} .0678468
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0908587{col 46}{space 2} .0310982{col 57}{space 1}    2.92{col 66}{space 3}0.003{col 74}{space 4} .0298918{col 87}{space 3} .1518256
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.0579812{col 46}{space 2} .0318399{col 57}{space 1}   -1.82{col 66}{space 3}0.069{col 74}{space 4}-.1204021{col 87}{space 3} .0044397
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0017025{col 46}{space 2} .0136266{col 57}{space 1}   -0.12{col 66}{space 3}0.901{col 74}{space 4} -.028417{col 87}{space 3}  .025012
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0794382{col 46}{space 2} .0645255{col 57}{space 1}    1.23{col 66}{space 3}0.218{col 74}{space 4}-.0470617{col 87}{space 3} .2059381
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.0367706{col 46}{space 2} .0896639{col 57}{space 1}   -0.41{col 66}{space 3}0.682{col 74}{space 4}-.2125533{col 87}{space 3} .1390121
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2}-.0023678{col 46}{space 2} .0293813{col 57}{space 1}   -0.08{col 66}{space 3}0.936{col 74}{space 4}-.0599688{col 87}{space 3} .0552332
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0217915{col 46}{space 2}  .029684{col 57}{space 1}   -0.73{col 66}{space 3}0.463{col 74}{space 4} -.079986{col 87}{space 3} .0364029
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0008218{col 46}{space 2} .0306449{col 57}{space 1}    0.03{col 66}{space 3}0.979{col 74}{space 4}-.0592564{col 87}{space 3} .0609001
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0009138{col 46}{space 2} .0312953{col 57}{space 1}    0.03{col 66}{space 3}0.977{col 74}{space 4}-.0604394{col 87}{space 3} .0622671
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0372004{col 46}{space 2} .0332745{col 57}{space 1}   -1.12{col 66}{space 3}0.264{col 74}{space 4}-.1024338{col 87}{space 3} .0280331
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0412119{col 46}{space 2} .0484945{col 57}{space 1}    0.85{col 66}{space 3}0.395{col 74}{space 4}-.0538597{col 87}{space 3} .1362834
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0405187{col 46}{space 2} .0549254{col 57}{space 1}   -0.74{col 66}{space 3}0.461{col 74}{space 4}-.1481979{col 87}{space 3} .0671604
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0263417{col 46}{space 2} .0080357{col 57}{space 1}    3.28{col 66}{space 3}0.001{col 74}{space 4} .0105881{col 87}{space 3} .0420953
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0144301{col 46}{space 2} .0110883{col 57}{space 1}    1.30{col 66}{space 3}0.193{col 74}{space 4}-.0073081{col 87}{space 3} .0361683
+{txt}{space 30}3  {c |}{col 34}{res}{space 2} .0054849{col 46}{space 2} .0102018{col 57}{space 1}    0.54{col 66}{space 3}0.591{col 74}{space 4}-.0145153{col 87}{space 3} .0254852
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0021798{col 46}{space 2} .0122808{col 57}{space 1}   -0.18{col 66}{space 3}0.859{col 74}{space 4} -.026256{col 87}{space 3} .0218963
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0048894{col 46}{space 2} .0119546{col 57}{space 1}   -0.41{col 66}{space 3}0.683{col 74}{space 4} -.028326{col 87}{space 3} .0185473
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0169123{col 46}{space 2} .0115942{col 57}{space 1}    1.46{col 66}{space 3}0.145{col 74}{space 4}-.0058178{col 87}{space 3} .0396424
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0144507{col 46}{space 2} .0110216{col 57}{space 1}    1.31{col 66}{space 3}0.190{col 74}{space 4}-.0071568{col 87}{space 3} .0360582
+{txt}{space 30}8  {c |}{col 34}{res}{space 2}   .01987{col 46}{space 2} .0104585{col 57}{space 1}    1.90{col 66}{space 3}0.058{col 74}{space 4}-.0006335{col 87}{space 3} .0403736
+{txt}{space 30}9  {c |}{col 34}{res}{space 2}   .02622{col 46}{space 2}  .010228{col 57}{space 1}    2.56{col 66}{space 3}0.010{col 74}{space 4} .0061684{col 87}{space 3} .0462715
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0129504{col 46}{space 2} .0104138{col 57}{space 1}    1.24{col 66}{space 3}0.214{col 74}{space 4}-.0074654{col 87}{space 3} .0333662
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0059571{col 46}{space 2} .0110262{col 57}{space 1}    0.54{col 66}{space 3}0.589{col 74}{space 4}-.0156593{col 87}{space 3} .0275735
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0078392{col 46}{space 2} .0126493{col 57}{space 1}    0.62{col 66}{space 3}0.535{col 74}{space 4}-.0169593{col 87}{space 3} .0326378
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.37897{col 46}{space 2} .1088695{col 57}{space 1}  113.70{col 66}{space 3}0.000{col 74}{space 4} 12.16553{col 87}{space 3}  12.5924
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     4758{col 28}{space 1}     4758{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      439{col 28}{space 1}        1{col 40}{result}{space 1}      438{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store baseline_ring
+{txt}
+{com}. 
+. quietly {c -(}
+{txt}
+{com}. 
+. * ============================================================================
+. * EVENT STUDY: Treatment vs Ring Control
+. * ============================================================================
+. * Figure B3. Event-study estimates for the baseline specification.
+. 
+. * Data still in memory from baseline
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_pre_5 treated_pre_4 treated_pre_3 treated_pre_2 ///
+>     treated_post_0 treated_post_1 treated_post_2 treated_post_3 treated_post_4 ///
+>     additional_dwellings i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 60 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 16 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    42,865
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  57{txt},{res}   4757{txt}){col 67}= {res}      4.78
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5145
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4467
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0137
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     4,758{txt}{col 51}Root MSE{col 67}= {res}    0.3786
+
+{txt}{ralign 98:(Std. err. adjusted for {res:4,758} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 19}treated_pre_5 {c |}{col 34}{res}{space 2} -.020416{col 46}{space 2} .0224098{col 57}{space 1}   -0.91{col 66}{space 3}0.362{col 74}{space 4}-.0643495{col 87}{space 3} .0235175
+{txt}{space 19}treated_pre_4 {c |}{col 34}{res}{space 2} .0121327{col 46}{space 2} .0251774{col 57}{space 1}    0.48{col 66}{space 3}0.630{col 74}{space 4}-.0372266{col 87}{space 3} .0614919
+{txt}{space 19}treated_pre_3 {c |}{col 34}{res}{space 2}-.0034178{col 46}{space 2} .0266524{col 57}{space 1}   -0.13{col 66}{space 3}0.898{col 74}{space 4}-.0556688{col 87}{space 3} .0488331
+{txt}{space 19}treated_pre_2 {c |}{col 34}{res}{space 2} .0116244{col 46}{space 2}  .026394{col 57}{space 1}    0.44{col 66}{space 3}0.660{col 74}{space 4}  -.04012{col 87}{space 3} .0633688
+{txt}{space 18}treated_post_0 {c |}{col 34}{res}{space 2} .0371081{col 46}{space 2}  .021473{col 57}{space 1}    1.73{col 66}{space 3}0.084{col 74}{space 4} -.004989{col 87}{space 3} .0792051
+{txt}{space 18}treated_post_1 {c |}{col 34}{res}{space 2} .0097703{col 46}{space 2} .0217519{col 57}{space 1}    0.45{col 66}{space 3}0.653{col 74}{space 4}-.0328735{col 87}{space 3} .0524141
+{txt}{space 18}treated_post_2 {c |}{col 34}{res}{space 2} .0498853{col 46}{space 2} .0266069{col 57}{space 1}    1.87{col 66}{space 3}0.061{col 74}{space 4}-.0022765{col 87}{space 3} .1020471
+{txt}{space 18}treated_post_3 {c |}{col 34}{res}{space 2} .0141355{col 46}{space 2}  .023469{col 57}{space 1}    0.60{col 66}{space 3}0.547{col 74}{space 4}-.0318746{col 87}{space 3} .0601455
+{txt}{space 18}treated_post_4 {c |}{col 34}{res}{space 2} .0260427{col 46}{space 2} .0239126{col 57}{space 1}    1.09{col 66}{space 3}0.276{col 74}{space 4}-.0208371{col 87}{space 3} .0729225
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 1.74e-06{col 46}{space 2} 8.02e-06{col 57}{space 1}    0.22{col 66}{space 3}0.828{col 74}{space 4} -.000014{col 87}{space 3} .0000175
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .1163972{col 46}{space 2} .1022966{col 57}{space 1}    1.14{col 66}{space 3}0.255{col 74}{space 4}-.0841514{col 87}{space 3} .3169459
+{txt}{space 26}House  {c |}{col 34}{res}{space 2} -.102923{col 46}{space 2}  .108876{col 57}{space 1}   -0.95{col 66}{space 3}0.345{col 74}{space 4}-.3163703{col 87}{space 3} .1105244
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .0751427{col 46}{space 2} .1038102{col 57}{space 1}    0.72{col 66}{space 3}0.469{col 74}{space 4}-.1283734{col 87}{space 3} .2786588
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0107992{col 46}{space 2} .0162869{col 57}{space 1}    0.66{col 66}{space 3}0.507{col 74}{space 4}-.0211306{col 87}{space 3}  .042729
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0333009{col 46}{space 2} .0216773{col 57}{space 1}   -1.54{col 66}{space 3}0.125{col 74}{space 4}-.0757984{col 87}{space 3} .0091967
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0136627{col 46}{space 2} .0144968{col 57}{space 1}    0.94{col 66}{space 3}0.346{col 74}{space 4}-.0147577{col 87}{space 3} .0420831
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0052006{col 46}{space 2} .0148429{col 57}{space 1}    0.35{col 66}{space 3}0.726{col 74}{space 4}-.0238984{col 87}{space 3} .0342996
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0241653{col 46}{space 2} .0399683{col 57}{space 1}   -0.60{col 66}{space 3}0.545{col 74}{space 4}-.1025217{col 87}{space 3} .0541912
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0185667{col 46}{space 2} .0157249{col 57}{space 1}   -1.18{col 66}{space 3}0.238{col 74}{space 4}-.0493948{col 87}{space 3} .0122614
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0100171{col 46}{space 2} .0134219{col 57}{space 1}    0.75{col 66}{space 3}0.456{col 74}{space 4} -.016296{col 87}{space 3} .0363301
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0011723{col 46}{space 2} .0003357{col 57}{space 1}    3.49{col 66}{space 3}0.000{col 74}{space 4} .0005142{col 87}{space 3} .0018305
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0391224{col 46}{space 2} .0064904{col 57}{space 1}    6.03{col 66}{space 3}0.000{col 74}{space 4} .0263982{col 87}{space 3} .0518465
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0081316{col 46}{space 2} .0129136{col 57}{space 1}   -0.63{col 66}{space 3}0.529{col 74}{space 4}-.0334481{col 87}{space 3}  .017185
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0293668{col 46}{space 2} .0187346{col 57}{space 1}   -1.57{col 66}{space 3}0.117{col 74}{space 4}-.0660952{col 87}{space 3} .0073616
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0105346{col 46}{space 2} .0149934{col 57}{space 1}   -0.70{col 66}{space 3}0.482{col 74}{space 4}-.0399286{col 87}{space 3} .0188594
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0308474{col 46}{space 2} .0187272{col 57}{space 1}   -1.65{col 66}{space 3}0.100{col 74}{space 4}-.0675614{col 87}{space 3} .0058666
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0141153{col 46}{space 2} .0157304{col 57}{space 1}   -0.90{col 66}{space 3}0.370{col 74}{space 4}-.0449543{col 87}{space 3} .0167237
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0074801{col 46}{space 2} .0172477{col 57}{space 1}   -0.43{col 66}{space 3}0.665{col 74}{space 4}-.0412936{col 87}{space 3} .0263335
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0029551{col 46}{space 2} .0170364{col 57}{space 1}   -0.17{col 66}{space 3}0.862{col 74}{space 4}-.0363544{col 87}{space 3} .0304442
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0115794{col 46}{space 2} .0176869{col 57}{space 1}    0.65{col 66}{space 3}0.513{col 74}{space 4} -.023095{col 87}{space 3} .0462539
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2} .0085184{col 46}{space 2} .0383037{col 57}{space 1}    0.22{col 66}{space 3}0.824{col 74}{space 4}-.0665746{col 87}{space 3} .0836115
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} .0013725{col 46}{space 2} .0186607{col 57}{space 1}    0.07{col 66}{space 3}0.941{col 74}{space 4}-.0352112{col 87}{space 3} .0379562
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0224653{col 46}{space 2} .0229542{col 57}{space 1}    0.98{col 66}{space 3}0.328{col 74}{space 4}-.0225355{col 87}{space 3} .0674662
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0908268{col 46}{space 2} .0310717{col 57}{space 1}    2.92{col 66}{space 3}0.003{col 74}{space 4} .0299119{col 87}{space 3} .1517417
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.0594965{col 46}{space 2} .0318604{col 57}{space 1}   -1.87{col 66}{space 3}0.062{col 74}{space 4}-.1219577{col 87}{space 3} .0029646
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0015163{col 46}{space 2} .0136343{col 57}{space 1}   -0.11{col 66}{space 3}0.911{col 74}{space 4}-.0282459{col 87}{space 3} .0252133
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0790485{col 46}{space 2} .0638214{col 57}{space 1}    1.24{col 66}{space 3}0.216{col 74}{space 4}-.0460711{col 87}{space 3}  .204168
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.0354183{col 46}{space 2}  .088746{col 57}{space 1}   -0.40{col 66}{space 3}0.690{col 74}{space 4}-.2094016{col 87}{space 3}  .138565
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2}-.0023355{col 46}{space 2} .0294168{col 57}{space 1}   -0.08{col 66}{space 3}0.937{col 74}{space 4}-.0600061{col 87}{space 3} .0553351
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0218128{col 46}{space 2} .0297107{col 57}{space 1}   -0.73{col 66}{space 3}0.463{col 74}{space 4}-.0800596{col 87}{space 3} .0364339
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0008974{col 46}{space 2}  .030671{col 57}{space 1}    0.03{col 66}{space 3}0.977{col 74}{space 4} -.059232{col 87}{space 3} .0610268
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0008559{col 46}{space 2}  .031318{col 57}{space 1}    0.03{col 66}{space 3}0.978{col 74}{space 4}-.0605418{col 87}{space 3} .0622536
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0372655{col 46}{space 2} .0332981{col 57}{space 1}   -1.12{col 66}{space 3}0.263{col 74}{space 4}-.1025451{col 87}{space 3} .0280141
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0412873{col 46}{space 2} .0484678{col 57}{space 1}    0.85{col 66}{space 3}0.394{col 74}{space 4} -.053732{col 87}{space 3} .1363066
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0396709{col 46}{space 2} .0550715{col 57}{space 1}   -0.72{col 66}{space 3}0.471{col 74}{space 4}-.1476365{col 87}{space 3} .0682946
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0261843{col 46}{space 2} .0080495{col 57}{space 1}    3.25{col 66}{space 3}0.001{col 74}{space 4} .0104035{col 87}{space 3} .0419651
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0144924{col 46}{space 2} .0110834{col 57}{space 1}    1.31{col 66}{space 3}0.191{col 74}{space 4}-.0072362{col 87}{space 3}  .036221
+{txt}{space 30}3  {c |}{col 34}{res}{space 2} .0052889{col 46}{space 2} .0102062{col 57}{space 1}    0.52{col 66}{space 3}0.604{col 74}{space 4}  -.01472{col 87}{space 3} .0252978
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0023323{col 46}{space 2} .0122709{col 57}{space 1}   -0.19{col 66}{space 3}0.849{col 74}{space 4}-.0263889{col 87}{space 3} .0217243
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0048994{col 46}{space 2} .0119366{col 57}{space 1}   -0.41{col 66}{space 3}0.681{col 74}{space 4}-.0283007{col 87}{space 3} .0185019
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0170071{col 46}{space 2} .0115985{col 57}{space 1}    1.47{col 66}{space 3}0.143{col 74}{space 4}-.0057313{col 87}{space 3} .0397455
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0143795{col 46}{space 2} .0110207{col 57}{space 1}    1.30{col 66}{space 3}0.192{col 74}{space 4}-.0072261{col 87}{space 3} .0359851
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0198487{col 46}{space 2} .0104501{col 57}{space 1}    1.90{col 66}{space 3}0.058{col 74}{space 4}-.0006383{col 87}{space 3} .0403357
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0260309{col 46}{space 2} .0102344{col 57}{space 1}    2.54{col 66}{space 3}0.011{col 74}{space 4} .0059668{col 87}{space 3}  .046095
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0127769{col 46}{space 2} .0104385{col 57}{space 1}    1.22{col 66}{space 3}0.221{col 74}{space 4}-.0076874{col 87}{space 3} .0332413
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0058919{col 46}{space 2} .0110314{col 57}{space 1}    0.53{col 66}{space 3}0.593{col 74}{space 4}-.0157348{col 87}{space 3} .0275186
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0077133{col 46}{space 2} .0126217{col 57}{space 1}    0.61{col 66}{space 3}0.541{col 74}{space 4}-.0170311{col 87}{space 3} .0324577
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.38259{col 46}{space 2} .1090656{col 57}{space 1}  113.53{col 66}{space 3}0.000{col 74}{space 4} 12.16877{col 87}{space 3} 12.59641
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     4758{col 28}{space 1}     4758{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      439{col 28}{space 1}        1{col 40}{result}{space 1}      438{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. 
+. local b_pre5 = _b[treated_pre_5]
+{txt}
+{com}. local b_pre4 = _b[treated_pre_4]
+{txt}
+{com}. local b_pre3 = _b[treated_pre_3]
+{txt}
+{com}. local b_pre2 = _b[treated_pre_2]
+{txt}
+{com}. local b_post0 = _b[treated_post_0]
+{txt}
+{com}. local b_post1 = _b[treated_post_1]
+{txt}
+{com}. local b_post2 = _b[treated_post_2]
+{txt}
+{com}. local b_post3 = _b[treated_post_3]
+{txt}
+{com}. local b_post4 = _b[treated_post_4]
+{txt}
+{com}. 
+. local se_pre5 = _se[treated_pre_5]
+{txt}
+{com}. local se_pre4 = _se[treated_pre_4]
+{txt}
+{com}. local se_pre3 = _se[treated_pre_3]
+{txt}
+{com}. local se_pre2 = _se[treated_pre_2]
+{txt}
+{com}. local se_post0 = _se[treated_post_0]
+{txt}
+{com}. local se_post1 = _se[treated_post_1]
+{txt}
+{com}. local se_post2 = _se[treated_post_2]
+{txt}
+{com}. local se_post3 = _se[treated_post_3]
+{txt}
+{com}. local se_post4 = _se[treated_post_4]
+{txt}
+{com}. 
+. capture graph set window fontface "Times New Roman"
+{txt}
+{com}. 
+. preserve
+{txt}
+{com}. clear
+{txt}
+{com}. * Build a small plotting dataset from the regression output so the x-axis respects the missing reference period.
+. set obs 9
+{txt}{p}
+Number of observations ({bf:_N}) was 0,
+now 9.
+{p_end}
+
+{com}. gen event_time = .
+{txt}(9 missing values generated)
+
+{com}. gen beta = .
+{txt}(9 missing values generated)
+
+{com}. gen se = .
+{txt}(9 missing values generated)
+
+{com}. 
+. replace event_time = -5 in 1
+{txt}(1 real change made)
+
+{com}. replace beta = `b_pre5' in 1
+{txt}(1 real change made)
+
+{com}. replace se = `se_pre5' in 1
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = -4 in 2
+{txt}(1 real change made)
+
+{com}. replace beta = `b_pre4' in 2
+{txt}(1 real change made)
+
+{com}. replace se = `se_pre4' in 2
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = -3 in 3
+{txt}(1 real change made)
+
+{com}. replace beta = `b_pre3' in 3
+{txt}(1 real change made)
+
+{com}. replace se = `se_pre3' in 3
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = -2 in 4
+{txt}(1 real change made)
+
+{com}. replace beta = `b_pre2' in 4
+{txt}(1 real change made)
+
+{com}. replace se = `se_pre2' in 4
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = 0 in 5
+{txt}(1 real change made)
+
+{com}. replace beta = `b_post0' in 5
+{txt}(1 real change made)
+
+{com}. replace se = `se_post0' in 5
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = 1 in 6
+{txt}(1 real change made)
+
+{com}. replace beta = `b_post1' in 6
+{txt}(1 real change made)
+
+{com}. replace se = `se_post1' in 6
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = 2 in 7
+{txt}(1 real change made)
+
+{com}. replace beta = `b_post2' in 7
+{txt}(1 real change made)
+
+{com}. replace se = `se_post2' in 7
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = 3 in 8
+{txt}(1 real change made)
+
+{com}. replace beta = `b_post3' in 8
+{txt}(1 real change made)
+
+{com}. replace se = `se_post3' in 8
+{txt}(1 real change made)
+
+{com}. 
+. replace event_time = 4 in 9
+{txt}(1 real change made)
+
+{com}. replace beta = `b_post4' in 9
+{txt}(1 real change made)
+
+{com}. replace se = `se_post4' in 9
+{txt}(1 real change made)
+
+{com}. 
+. gen ci_low = beta - 1.96 * se
+{txt}
+{com}. gen ci_high = beta + 1.96 * se
+{txt}
+{com}. 
+. twoway ///
+>     (rcap ci_high ci_low event_time, lcolor("31 78 121")) ///
+>     (scatter beta event_time, mcolor("168 77 77") msymbol(O) msize(medium)), ///
+>     xline(-1, lpattern(dash) lcolor("168 77 77")) ///
+>     yline(0, lpattern(dash) lcolor(black)) ///
+>     xlabel(-5(1)4, labsize(medium)) ///
+>     ylabel(-.10(.05).10, angle(horizontal) format(%4.2f) labsize(medium)) ///
+>     yscale(range(-.10 .10)) ///
+>     xtitle("Years relative to treatment (2021)", size(medlarge) margin(medsmall)) ///
+>     ytitle("Effect on log price", size(medlarge) margin(medsmall)) ///
+>     title("Event Study: Treatment vs Ring Control (Postcode FE)", size(large) margin(medium)) ///
+>     note("Reference period: year -1 (2020).", size(small) margin(medium)) ///
+>     legend(off) ///
+>     xsize(9) ysize(6.5) ///
+>     graphregion(color(white) margin(medium)) plotregion(color(white) margin(medium))
+{res}{txt}
+{com}. restore
+{txt}
+{com}. 
+. * ============================================================================
+. * ROBUSTNESS: Alternative Operator Controls
+. * ============================================================================
+. * Table 4, columns (1) and (2): operator-control robustness using SWR and Southeastern.
+. 
+. foreach op in swr southeastern {c -(}
+{txt}  2{com}.     quietly {c -(}
+{txt}  3{com}.         use "`temp_dir'/temp_treatment.dta", clear
+{txt}  4{com}.         append using "`temp_dir'/temp_control_`op'.dta"
+{txt}  5{com}.         egen house_id = group(postcode PAON SAON)
+{txt}  6{com}.         prep_long, idvars(house_id treated postcode PAON SAON local_authority nearest_station oa21cd dist_to_treated)
+{txt}  7{com}.         bysort postcode: gen pc_count = _N
+{txt}  8{com}.         keep if pc_count >= 2
+{txt}  9{com}.         drop pc_count
+{txt} 10{com}.         egen postcode_id  = group(postcode)
+{txt} 11{com}.         egen station_id = group(nearest_station)
+{txt} 12{com}.     {c )-}
+{txt} 13{com}. 
+.     reghdfe log_price treated_post additional_dwellings ///
+>         i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>         NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>         EXTENSION_COUNT i.month i.year, ///
+>         absorb(postcode_id station_id) vce(cluster postcode_id)
+{txt} 14{com}.     estimates store control_`op'
+{txt} 15{com}. {c )-}
+{res}{txt}(dropped 34 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 2 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    35,039
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  57{txt},{res}   3761{txt}){col 67}= {res}      6.06
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5014
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4391
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0178
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     3,762{txt}{col 51}Root MSE{col 67}= {res}    0.3949
+
+{txt}{ralign 98:(Std. err. adjusted for {res:3,762} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2}   .03266{col 46}{space 2} .0123954{col 57}{space 1}    2.63{col 66}{space 3}0.008{col 74}{space 4} .0083576{col 87}{space 3} .0569624
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2}-3.51e-06{col 46}{space 2} 5.21e-06{col 57}{space 1}   -0.67{col 66}{space 3}0.501{col 74}{space 4}-.0000137{col 87}{space 3} 6.72e-06
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2}-.0007473{col 46}{space 2} .0742998{col 57}{space 1}   -0.01{col 66}{space 3}0.992{col 74}{space 4}-.1464191{col 87}{space 3} .1449245
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.2208886{col 46}{space 2}  .082842{col 57}{space 1}   -2.67{col 66}{space 3}0.008{col 74}{space 4}-.3833083{col 87}{space 3}-.0584689
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} -.020695{col 46}{space 2} .0780347{col 57}{space 1}   -0.27{col 66}{space 3}0.791{col 74}{space 4}-.1736895{col 87}{space 3} .1322995
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0337879{col 46}{space 2} .0194648{col 57}{space 1}    1.74{col 66}{space 3}0.083{col 74}{space 4}-.0043746{col 87}{space 3} .0719505
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0194273{col 46}{space 2} .0219492{col 57}{space 1}   -0.89{col 66}{space 3}0.376{col 74}{space 4}-.0624607{col 87}{space 3} .0236062
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0289879{col 46}{space 2} .0186757{col 57}{space 1}    1.55{col 66}{space 3}0.121{col 74}{space 4}-.0076275{col 87}{space 3} .0656034
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0156533{col 46}{space 2} .0181072{col 57}{space 1}    0.86{col 66}{space 3}0.387{col 74}{space 4}-.0198475{col 87}{space 3} .0511542
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2} .0111467{col 46}{space 2} .0486652{col 57}{space 1}    0.23{col 66}{space 3}0.819{col 74}{space 4}-.0842661{col 87}{space 3} .1065594
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0010878{col 46}{space 2} .0194634{col 57}{space 1}   -0.06{col 66}{space 3}0.955{col 74}{space 4}-.0392477{col 87}{space 3} .0370721
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0262198{col 46}{space 2} .0168566{col 57}{space 1}    1.56{col 66}{space 3}0.120{col 74}{space 4}-.0068292{col 87}{space 3} .0592687
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0017775{col 46}{space 2} .0002828{col 57}{space 1}    6.28{col 66}{space 3}0.000{col 74}{space 4}  .001223{col 87}{space 3}  .002332
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0328035{col 46}{space 2} .0064155{col 57}{space 1}    5.11{col 66}{space 3}0.000{col 74}{space 4} .0202252{col 87}{space 3} .0453817
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0244985{col 46}{space 2} .0128301{col 57}{space 1}   -1.91{col 66}{space 3}0.056{col 74}{space 4}-.0496531{col 87}{space 3} .0006561
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0153946{col 46}{space 2} .0159369{col 57}{space 1}   -0.97{col 66}{space 3}0.334{col 74}{space 4}-.0466404{col 87}{space 3} .0158513
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0145037{col 46}{space 2} .0175382{col 57}{space 1}   -0.83{col 66}{space 3}0.408{col 74}{space 4}-.0488889{col 87}{space 3} .0198816
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0346286{col 46}{space 2} .0205999{col 57}{space 1}   -1.68{col 66}{space 3}0.093{col 74}{space 4}-.0750166{col 87}{space 3} .0057594
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0265255{col 46}{space 2} .0177351{col 57}{space 1}   -1.50{col 66}{space 3}0.135{col 74}{space 4}-.0612969{col 87}{space 3} .0082459
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0333376{col 46}{space 2}  .016895{col 57}{space 1}   -1.97{col 66}{space 3}0.049{col 74}{space 4}-.0664619{col 87}{space 3}-.0002134
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0088563{col 46}{space 2} .0164463{col 57}{space 1}   -0.54{col 66}{space 3}0.590{col 74}{space 4}-.0411008{col 87}{space 3} .0233883
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2}  .006386{col 46}{space 2} .0159107{col 57}{space 1}    0.40{col 66}{space 3}0.688{col 74}{space 4}-.0248084{col 87}{space 3} .0375803
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2} .0067693{col 46}{space 2}  .039468{col 57}{space 1}    0.17{col 66}{space 3}0.864{col 74}{space 4}-.0706115{col 87}{space 3} .0841501
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} -.008563{col 46}{space 2}  .019655{col 57}{space 1}   -0.44{col 66}{space 3}0.663{col 74}{space 4}-.0470984{col 87}{space 3} .0299725
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0398876{col 46}{space 2}  .025144{col 57}{space 1}    1.59{col 66}{space 3}0.113{col 74}{space 4}-.0094095{col 87}{space 3} .0891848
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0488425{col 46}{space 2} .0349664{col 57}{space 1}    1.40{col 66}{space 3}0.163{col 74}{space 4}-.0197125{col 87}{space 3} .1173974
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0159828{col 46}{space 2}  .014708{col 57}{space 1}   -1.09{col 66}{space 3}0.277{col 74}{space 4}-.0448192{col 87}{space 3} .0128536
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2}-.0262005{col 46}{space 2} .0759154{col 57}{space 1}   -0.35{col 66}{space 3}0.730{col 74}{space 4}-.1750398{col 87}{space 3} .1226388
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.1562193{col 46}{space 2} .0757177{col 57}{space 1}   -2.06{col 66}{space 3}0.039{col 74}{space 4}-.3046711{col 87}{space 3}-.0077676
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2}-.0111631{col 46}{space 2} .0328428{col 57}{space 1}   -0.34{col 66}{space 3}0.734{col 74}{space 4}-.0755544{col 87}{space 3} .0532283
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0263965{col 46}{space 2} .0332363{col 57}{space 1}   -0.79{col 66}{space 3}0.427{col 74}{space 4}-.0915593{col 87}{space 3} .0387664
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2}-.0232304{col 46}{space 2} .0352356{col 57}{space 1}   -0.66{col 66}{space 3}0.510{col 74}{space 4}-.0923132{col 87}{space 3} .0458524
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2}-.0026887{col 46}{space 2} .0350553{col 57}{space 1}   -0.08{col 66}{space 3}0.939{col 74}{space 4} -.071418{col 87}{space 3} .0660406
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0440561{col 46}{space 2} .0361882{col 57}{space 1}   -1.22{col 66}{space 3}0.224{col 74}{space 4}-.1150065{col 87}{space 3} .0268944
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0393773{col 46}{space 2} .0578405{col 57}{space 1}    0.68{col 66}{space 3}0.496{col 74}{space 4}-.0740244{col 87}{space 3}  .152779
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2} -.018746{col 46}{space 2} .0821858{col 57}{space 1}   -0.23{col 66}{space 3}0.820{col 74}{space 4}-.1798791{col 87}{space 3} .1423871
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0135734{col 46}{space 2} .0095872{col 57}{space 1}    1.42{col 66}{space 3}0.157{col 74}{space 4}-.0052231{col 87}{space 3}   .03237
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0085132{col 46}{space 2} .0111738{col 57}{space 1}    0.76{col 66}{space 3}0.446{col 74}{space 4} -.013394{col 87}{space 3} .0304205
+{txt}{space 30}3  {c |}{col 34}{res}{space 2}-.0063872{col 46}{space 2} .0106978{col 57}{space 1}   -0.60{col 66}{space 3}0.551{col 74}{space 4}-.0273613{col 87}{space 3} .0145869
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0022897{col 46}{space 2} .0121494{col 57}{space 1}   -0.19{col 66}{space 3}0.851{col 74}{space 4}-.0261097{col 87}{space 3} .0215304
+{txt}{space 30}5  {c |}{col 34}{res}{space 2} -.032477{col 46}{space 2} .0144354{col 57}{space 1}   -2.25{col 66}{space 3}0.025{col 74}{space 4} -.060779{col 87}{space 3}-.0041751
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0007854{col 46}{space 2} .0117702{col 57}{space 1}    0.07{col 66}{space 3}0.947{col 74}{space 4}-.0222912{col 87}{space 3}  .023862
+{txt}{space 30}7  {c |}{col 34}{res}{space 2}-.0084068{col 46}{space 2} .0138101{col 57}{space 1}   -0.61{col 66}{space 3}0.543{col 74}{space 4}-.0354828{col 87}{space 3} .0186691
+{txt}{space 30}8  {c |}{col 34}{res}{space 2}  .003973{col 46}{space 2} .0109788{col 57}{space 1}    0.36{col 66}{space 3}0.717{col 74}{space 4} -.017552{col 87}{space 3}  .025498
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0049767{col 46}{space 2} .0115117{col 57}{space 1}    0.43{col 66}{space 3}0.666{col 74}{space 4}-.0175932{col 87}{space 3} .0275465
+{txt}{space 29}10  {c |}{col 34}{res}{space 2}-.0109701{col 46}{space 2} .0164452{col 57}{space 1}   -0.67{col 66}{space 3}0.505{col 74}{space 4}-.0432126{col 87}{space 3} .0212723
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} -.003124{col 46}{space 2} .0113601{col 57}{space 1}   -0.28{col 66}{space 3}0.783{col 74}{space 4}-.0253967{col 87}{space 3} .0191486
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0019218{col 46}{space 2} .0124949{col 57}{space 1}    0.15{col 66}{space 3}0.878{col 74}{space 4}-.0225756{col 87}{space 3} .0264191
+{txt}{space 32} {c |}
+{space 28}year {c |}
+{space 27}2017  {c |}{col 34}{res}{space 2} .0338908{col 46}{space 2} .0126301{col 57}{space 1}    2.68{col 66}{space 3}0.007{col 74}{space 4} .0091284{col 87}{space 3} .0586533
+{txt}{space 27}2018  {c |}{col 34}{res}{space 2} -.034089{col 46}{space 2} .0124285{col 57}{space 1}   -2.74{col 66}{space 3}0.006{col 74}{space 4}-.0584562{col 87}{space 3}-.0097218
+{txt}{space 27}2019  {c |}{col 34}{res}{space 2}-.0588006{col 46}{space 2} .0170973{col 57}{space 1}   -3.44{col 66}{space 3}0.001{col 74}{space 4}-.0923216{col 87}{space 3}-.0252797
+{txt}{space 27}2020  {c |}{col 34}{res}{space 2} -.007959{col 46}{space 2} .0134302{col 57}{space 1}   -0.59{col 66}{space 3}0.553{col 74}{space 4}-.0342902{col 87}{space 3} .0183721
+{txt}{space 27}2021  {c |}{col 34}{res}{space 2}-.0191418{col 46}{space 2} .0134646{col 57}{space 1}   -1.42{col 66}{space 3}0.155{col 74}{space 4}-.0455404{col 87}{space 3} .0072569
+{txt}{space 27}2022  {c |}{col 34}{res}{space 2} .0118468{col 46}{space 2}  .014259{col 57}{space 1}    0.83{col 66}{space 3}0.406{col 74}{space 4}-.0161094{col 87}{space 3} .0398029
+{txt}{space 27}2023  {c |}{col 34}{res}{space 2}-.0044519{col 46}{space 2} .0141196{col 57}{space 1}   -0.32{col 66}{space 3}0.753{col 74}{space 4}-.0321347{col 87}{space 3} .0232308
+{txt}{space 27}2024  {c |}{col 34}{res}{space 2}-.0160425{col 46}{space 2} .0142591{col 57}{space 1}   -1.13{col 66}{space 3}0.261{col 74}{space 4}-.0439987{col 87}{space 3} .0119138
+{txt}{space 27}2025  {c |}{col 34}{res}{space 2} .0018627{col 46}{space 2} .0122479{col 57}{space 1}    0.15{col 66}{space 3}0.879{col 74}{space 4}-.0221506{col 87}{space 3} .0258759
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.57952{col 46}{space 2} .0864212{col 57}{space 1}  145.56{col 66}{space 3}0.000{col 74}{space 4} 12.41008{col 87}{space 3} 12.74896
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 13}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text} Absorbed FE{col 14}{c |} Categories{col 27} - Redundant{col 39}  = Num. Coefs{col 54}{c |}
+{res}{col 1}{text}{hline 13}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text} postcode_id{col 14}{c |}{space 1}     3762{col 27}{space 1}     3762{col 39}{result}{space 1}        0{col 53}{text}*{col 54}{c |}
+{res}{col 1}{text}  station_id{col 14}{c |}{space 1}       74{col 27}{space 1}        1{col 39}{result}{space 1}       73{col 53}{text} {col 54}{c |}
+{res}{col 1}{text}{hline 13}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}(dropped 29 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 2 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    23,820
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  57{txt},{res}   2552{txt}){col 67}= {res}      4.83
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5077
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4456
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0200
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     2,553{txt}{col 51}Root MSE{col 67}= {res}    0.3532
+
+{txt}{ralign 98:(Std. err. adjusted for {res:2,553} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0326747{col 46}{space 2} .0181161{col 57}{space 1}    1.80{col 66}{space 3}0.071{col 74}{space 4} -.002849{col 87}{space 3} .0681985
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 3.48e-06{col 46}{space 2} 5.23e-06{col 57}{space 1}    0.67{col 66}{space 3}0.506{col 74}{space 4}-6.78e-06{col 87}{space 3} .0000137
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2}-.0487294{col 46}{space 2} .0558193{col 57}{space 1}   -0.87{col 66}{space 3}0.383{col 74}{space 4}-.1581852{col 87}{space 3} .0607264
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.2282928{col 46}{space 2} .0681946{col 57}{space 1}   -3.35{col 66}{space 3}0.001{col 74}{space 4}-.3620152{col 87}{space 3}-.0945704
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2}-.1009391{col 46}{space 2} .0624425{col 57}{space 1}   -1.62{col 66}{space 3}0.106{col 74}{space 4}-.2233821{col 87}{space 3}  .021504
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0165434{col 46}{space 2} .0199178{col 57}{space 1}    0.83{col 66}{space 3}0.406{col 74}{space 4}-.0225134{col 87}{space 3} .0556001
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0560108{col 46}{space 2} .0254532{col 57}{space 1}   -2.20{col 66}{space 3}0.028{col 74}{space 4}-.1059219{col 87}{space 3}-.0060997
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0097451{col 46}{space 2} .0171474{col 57}{space 1}    0.57{col 66}{space 3}0.570{col 74}{space 4}-.0238792{col 87}{space 3} .0433693
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2}-.0021535{col 46}{space 2} .0176351{col 57}{space 1}   -0.12{col 66}{space 3}0.903{col 74}{space 4}-.0367339{col 87}{space 3}  .032427
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0423942{col 46}{space 2} .0557258{col 57}{space 1}   -0.76{col 66}{space 3}0.447{col 74}{space 4}-.1516666{col 87}{space 3} .0668782
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0214358{col 46}{space 2} .0187928{col 57}{space 1}   -1.14{col 66}{space 3}0.254{col 74}{space 4}-.0582865{col 87}{space 3}  .015415
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0079387{col 46}{space 2} .0152458{col 57}{space 1}    0.52{col 66}{space 3}0.603{col 74}{space 4}-.0219567{col 87}{space 3} .0378342
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0012986{col 46}{space 2} .0003107{col 57}{space 1}    4.18{col 66}{space 3}0.000{col 74}{space 4} .0006892{col 87}{space 3} .0019079
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0399266{col 46}{space 2} .0078439{col 57}{space 1}    5.09{col 66}{space 3}0.000{col 74}{space 4} .0245454{col 87}{space 3} .0553077
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0110278{col 46}{space 2} .0135683{col 57}{space 1}   -0.81{col 66}{space 3}0.416{col 74}{space 4}-.0376338{col 87}{space 3} .0155782
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0064398{col 46}{space 2} .0164497{col 57}{space 1}   -0.39{col 66}{space 3}0.695{col 74}{space 4}-.0386959{col 87}{space 3} .0258163
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0165279{col 46}{space 2}  .016856{col 57}{space 1}   -0.98{col 66}{space 3}0.327{col 74}{space 4}-.0495808{col 87}{space 3} .0165249
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0294587{col 46}{space 2}  .024482{col 57}{space 1}   -1.20{col 66}{space 3}0.229{col 74}{space 4}-.0774653{col 87}{space 3}  .018548
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0197649{col 46}{space 2}  .019665{col 57}{space 1}   -1.01{col 66}{space 3}0.315{col 74}{space 4}-.0583258{col 87}{space 3}  .018796
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0212659{col 46}{space 2} .0187437{col 57}{space 1}   -1.13{col 66}{space 3}0.257{col 74}{space 4}-.0580203{col 87}{space 3} .0154885
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0100062{col 46}{space 2} .0202366{col 57}{space 1}   -0.49{col 66}{space 3}0.621{col 74}{space 4} -.049688{col 87}{space 3} .0296756
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0226197{col 46}{space 2} .0202253{col 57}{space 1}    1.12{col 66}{space 3}0.264{col 74}{space 4}  -.01704{col 87}{space 3} .0622793
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}-.0121722{col 46}{space 2} .0498756{col 57}{space 1}   -0.24{col 66}{space 3}0.807{col 74}{space 4}-.1099729{col 87}{space 3} .0856285
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2}-.0029917{col 46}{space 2} .0262758{col 57}{space 1}   -0.11{col 66}{space 3}0.909{col 74}{space 4}-.0545157{col 87}{space 3} .0485323
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0213675{col 46}{space 2} .0433458{col 57}{space 1}    0.49{col 66}{space 3}0.622{col 74}{space 4} -.063629{col 87}{space 3} .1063641
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2}  .083346{col 46}{space 2} .0453817{col 57}{space 1}    1.84{col 66}{space 3}0.066{col 74}{space 4}-.0056427{col 87}{space 3} .1723346
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0171552{col 46}{space 2} .0182084{col 57}{space 1}   -0.94{col 66}{space 3}0.346{col 74}{space 4}  -.05286{col 87}{space 3} .0185496
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0572852{col 46}{space 2} .1043022{col 57}{space 1}    0.55{col 66}{space 3}0.583{col 74}{space 4}-.1472403{col 87}{space 3} .2618107
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.1471883{col 46}{space 2} .0734261{col 57}{space 1}   -2.00{col 66}{space 3}0.045{col 74}{space 4}-.2911691{col 87}{space 3}-.0032074
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2}  -.02747{col 46}{space 2} .0332069{col 57}{space 1}   -0.83{col 66}{space 3}0.408{col 74}{space 4}-.0925853{col 87}{space 3} .0376452
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0432231{col 46}{space 2}  .033788{col 57}{space 1}   -1.28{col 66}{space 3}0.201{col 74}{space 4}-.1094778{col 87}{space 3} .0230316
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2}-.0297374{col 46}{space 2} .0351687{col 57}{space 1}   -0.85{col 66}{space 3}0.398{col 74}{space 4}-.0986995{col 87}{space 3} .0392247
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} -.025738{col 46}{space 2} .0357697{col 57}{space 1}   -0.72{col 66}{space 3}0.472{col 74}{space 4}-.0958786{col 87}{space 3} .0444026
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0671633{col 46}{space 2} .0384305{col 57}{space 1}   -1.75{col 66}{space 3}0.081{col 74}{space 4}-.1425213{col 87}{space 3} .0081948
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2}  .029981{col 46}{space 2} .0648329{col 57}{space 1}    0.46{col 66}{space 3}0.644{col 74}{space 4}-.0971495{col 87}{space 3} .1571115
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2} .0029924{col 46}{space 2} .0610268{col 57}{space 1}    0.05{col 66}{space 3}0.961{col 74}{space 4}-.1166747{col 87}{space 3} .1226596
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0243219{col 46}{space 2} .0106706{col 57}{space 1}    2.28{col 66}{space 3}0.023{col 74}{space 4} .0033979{col 87}{space 3} .0452459
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0078812{col 46}{space 2} .0122392{col 57}{space 1}    0.64{col 66}{space 3}0.520{col 74}{space 4}-.0161186{col 87}{space 3}  .031881
+{txt}{space 30}3  {c |}{col 34}{res}{space 2}-.0042122{col 46}{space 2} .0126398{col 57}{space 1}   -0.33{col 66}{space 3}0.739{col 74}{space 4}-.0289974{col 87}{space 3} .0205731
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0046604{col 46}{space 2} .0135695{col 57}{space 1}   -0.34{col 66}{space 3}0.731{col 74}{space 4}-.0312687{col 87}{space 3}  .021948
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0312977{col 46}{space 2} .0170942{col 57}{space 1}   -1.83{col 66}{space 3}0.067{col 74}{space 4}-.0648175{col 87}{space 3} .0022222
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0147471{col 46}{space 2}  .011942{col 57}{space 1}    1.23{col 66}{space 3}0.217{col 74}{space 4}-.0086699{col 87}{space 3} .0381641
+{txt}{space 30}7  {c |}{col 34}{res}{space 2}-.0007473{col 46}{space 2} .0138261{col 57}{space 1}   -0.05{col 66}{space 3}0.957{col 74}{space 4}-.0278588{col 87}{space 3} .0263642
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0110168{col 46}{space 2} .0129243{col 57}{space 1}    0.85{col 66}{space 3}0.394{col 74}{space 4}-.0143264{col 87}{space 3}   .03636
+{txt}{space 30}9  {c |}{col 34}{res}{space 2}   .01253{col 46}{space 2}  .012484{col 57}{space 1}    1.00{col 66}{space 3}0.316{col 74}{space 4}-.0119498{col 87}{space 3} .0370097
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0150432{col 46}{space 2} .0125758{col 57}{space 1}    1.20{col 66}{space 3}0.232{col 74}{space 4}-.0096167{col 87}{space 3} .0397031
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0038347{col 46}{space 2} .0131554{col 57}{space 1}    0.29{col 66}{space 3}0.771{col 74}{space 4}-.0219616{col 87}{space 3}  .029631
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0161836{col 46}{space 2} .0132192{col 57}{space 1}    1.22{col 66}{space 3}0.221{col 74}{space 4}-.0097378{col 87}{space 3}  .042105
+{txt}{space 32} {c |}
+{space 28}year {c |}
+{space 27}2017  {c |}{col 34}{res}{space 2} .0295671{col 46}{space 2} .0130104{col 57}{space 1}    2.27{col 66}{space 3}0.023{col 74}{space 4}  .004055{col 87}{space 3} .0550791
+{txt}{space 27}2018  {c |}{col 34}{res}{space 2}-.0122776{col 46}{space 2} .0139507{col 57}{space 1}   -0.88{col 66}{space 3}0.379{col 74}{space 4}-.0396335{col 87}{space 3} .0150783
+{txt}{space 27}2019  {c |}{col 34}{res}{space 2}-.0071987{col 46}{space 2} .0138638{col 57}{space 1}   -0.52{col 66}{space 3}0.604{col 74}{space 4}-.0343842{col 87}{space 3} .0199868
+{txt}{space 27}2020  {c |}{col 34}{res}{space 2} .0086082{col 46}{space 2} .0138281{col 57}{space 1}    0.62{col 66}{space 3}0.534{col 74}{space 4}-.0185073{col 87}{space 3} .0357237
+{txt}{space 27}2021  {c |}{col 34}{res}{space 2}-.0030612{col 46}{space 2} .0198954{col 57}{space 1}   -0.15{col 66}{space 3}0.878{col 74}{space 4}-.0420739{col 87}{space 3} .0359515
+{txt}{space 27}2022  {c |}{col 34}{res}{space 2} .0274748{col 46}{space 2} .0190594{col 57}{space 1}    1.44{col 66}{space 3}0.150{col 74}{space 4}-.0098988{col 87}{space 3} .0648483
+{txt}{space 27}2023  {c |}{col 34}{res}{space 2} .0227041{col 46}{space 2} .0204271{col 57}{space 1}    1.11{col 66}{space 3}0.266{col 74}{space 4}-.0173513{col 87}{space 3} .0627596
+{txt}{space 27}2024  {c |}{col 34}{res}{space 2} .0055112{col 46}{space 2} .0187136{col 57}{space 1}    0.29{col 66}{space 3}0.768{col 74}{space 4}-.0311842{col 87}{space 3} .0422066
+{txt}{space 27}2025  {c |}{col 34}{res}{space 2} .0134497{col 46}{space 2} .0196235{col 57}{space 1}    0.69{col 66}{space 3}0.493{col 74}{space 4}  -.02503{col 87}{space 3} .0519294
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.51979{col 46}{space 2} .0718013{col 57}{space 1}  174.37{col 66}{space 3}0.000{col 74}{space 4}   12.379{col 87}{space 3} 12.66059
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 13}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text} Absorbed FE{col 14}{c |} Categories{col 27} - Redundant{col 39}  = Num. Coefs{col 54}{c |}
+{res}{col 1}{text}{hline 13}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text} postcode_id{col 14}{c |}{space 1}     2553{col 27}{space 1}     2553{col 39}{result}{space 1}        0{col 53}{text}*{col 54}{c |}
+{res}{col 1}{text}  station_id{col 14}{c |}{space 1}       60{col 27}{space 1}        1{col 39}{result}{space 1}       59{col 53}{text} {col 54}{c |}
+{res}{col 1}{text}{hline 13}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. 
+. * ============================================================================
+. * ROBUSTNESS: Alternative Treatment Radius (500m and 1.5km)
+. * ============================================================================
+. * Table 4, columns (5) and (6): alternative treatment-radius checks.
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 56 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 16 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    29,050
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}   3227{txt}){col 67}= {res}      3.43
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5203
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4502
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0115
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     3,228{txt}{col 51}Root MSE{col 67}= {res}    0.3927
+
+{txt}{ralign 98:(Std. err. adjusted for {res:3,228} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0231746{col 46}{space 2} .0142914{col 57}{space 1}    1.62{col 66}{space 3}0.105{col 74}{space 4}-.0048466{col 87}{space 3} .0511957
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 3.77e-06{col 46}{space 2} .0000102{col 57}{space 1}    0.37{col 66}{space 3}0.711{col 74}{space 4}-.0000162{col 87}{space 3} .0000237
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .2065972{col 46}{space 2} .0989236{col 57}{space 1}    2.09{col 66}{space 3}0.037{col 74}{space 4} .0126377{col 87}{space 3} .4005567
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.0141949{col 46}{space 2} .1114021{col 57}{space 1}   -0.13{col 66}{space 3}0.899{col 74}{space 4}-.2326208{col 87}{space 3} .2042311
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .1614254{col 46}{space 2} .1009624{col 57}{space 1}    1.60{col 66}{space 3}0.110{col 74}{space 4}-.0365314{col 87}{space 3} .3593822
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0016189{col 46}{space 2} .0214134{col 57}{space 1}    0.08{col 66}{space 3}0.940{col 74}{space 4}-.0403663{col 87}{space 3} .0436041
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0263613{col 46}{space 2}  .025971{col 57}{space 1}   -1.02{col 66}{space 3}0.310{col 74}{space 4}-.0772825{col 87}{space 3}   .02456
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0125184{col 46}{space 2}  .019193{col 57}{space 1}    0.65{col 66}{space 3}0.514{col 74}{space 4}-.0251133{col 87}{space 3}   .05015
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0045508{col 46}{space 2} .0197632{col 57}{space 1}    0.23{col 66}{space 3}0.818{col 74}{space 4}-.0341988{col 87}{space 3} .0433005
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0209735{col 46}{space 2} .0391233{col 57}{space 1}   -0.54{col 66}{space 3}0.592{col 74}{space 4}-.0976825{col 87}{space 3} .0557354
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0158513{col 46}{space 2} .0205429{col 57}{space 1}   -0.77{col 66}{space 3}0.440{col 74}{space 4}-.0561299{col 87}{space 3} .0244272
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0114004{col 46}{space 2} .0180639{col 57}{space 1}    0.63{col 66}{space 3}0.528{col 74}{space 4}-.0240175{col 87}{space 3} .0468182
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0011518{col 46}{space 2} .0004049{col 57}{space 1}    2.84{col 66}{space 3}0.004{col 74}{space 4}  .000358{col 87}{space 3} .0019457
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0333601{col 46}{space 2} .0084706{col 57}{space 1}    3.94{col 66}{space 3}0.000{col 74}{space 4} .0167517{col 87}{space 3} .0499685
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0021217{col 46}{space 2}  .017748{col 57}{space 1}   -0.12{col 66}{space 3}0.905{col 74}{space 4}-.0369203{col 87}{space 3} .0326768
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0378352{col 46}{space 2} .0271267{col 57}{space 1}   -1.39{col 66}{space 3}0.163{col 74}{space 4}-.0910225{col 87}{space 3}  .015352
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0026398{col 46}{space 2} .0212299{col 57}{space 1}   -0.12{col 66}{space 3}0.901{col 74}{space 4}-.0442652{col 87}{space 3} .0389856
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0143184{col 46}{space 2} .0249517{col 57}{space 1}   -0.57{col 66}{space 3}0.566{col 74}{space 4} -.063241{col 87}{space 3} .0346043
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2} .0040891{col 46}{space 2} .0203947{col 57}{space 1}    0.20{col 66}{space 3}0.841{col 74}{space 4}-.0358988{col 87}{space 3}  .044077
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0006276{col 46}{space 2} .0233328{col 57}{space 1}   -0.03{col 66}{space 3}0.979{col 74}{space 4}-.0463762{col 87}{space 3}  .045121
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2} .0153877{col 46}{space 2} .0225584{col 57}{space 1}    0.68{col 66}{space 3}0.495{col 74}{space 4}-.0288425{col 87}{space 3} .0596179
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0168315{col 46}{space 2} .0236978{col 57}{space 1}    0.71{col 66}{space 3}0.478{col 74}{space 4}-.0296327{col 87}{space 3} .0632957
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}  .000672{col 46}{space 2} .0466393{col 57}{space 1}    0.01{col 66}{space 3}0.989{col 74}{space 4}-.0907737{col 87}{space 3} .0921177
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} .0126653{col 46}{space 2} .0224124{col 57}{space 1}    0.57{col 66}{space 3}0.572{col 74}{space 4}-.0312788{col 87}{space 3} .0566093
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0200158{col 46}{space 2} .0257037{col 57}{space 1}    0.78{col 66}{space 3}0.436{col 74}{space 4}-.0303814{col 87}{space 3} .0704131
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0835512{col 46}{space 2} .0363644{col 57}{space 1}    2.30{col 66}{space 3}0.022{col 74}{space 4} .0122516{col 87}{space 3} .1548507
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.0735037{col 46}{space 2} .0370201{col 57}{space 1}   -1.99{col 66}{space 3}0.047{col 74}{space 4}-.1460889{col 87}{space 3}-.0009185
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}  .008903{col 46}{space 2} .0156428{col 57}{space 1}    0.57{col 66}{space 3}0.569{col 74}{space 4}-.0217679{col 87}{space 3} .0395739
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .1323291{col 46}{space 2} .0503306{col 57}{space 1}    2.63{col 66}{space 3}0.009{col 74}{space 4} .0336459{col 87}{space 3} .2310123
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.0183886{col 46}{space 2} .1165175{col 57}{space 1}   -0.16{col 66}{space 3}0.875{col 74}{space 4}-.2468445{col 87}{space 3} .2100673
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2} .0245377{col 46}{space 2} .0354242{col 57}{space 1}    0.69{col 66}{space 3}0.489{col 74}{space 4}-.0449186{col 87}{space 3} .0939939
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2} .0020649{col 46}{space 2} .0358906{col 57}{space 1}    0.06{col 66}{space 3}0.954{col 74}{space 4}-.0683058{col 87}{space 3} .0724356
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0341155{col 46}{space 2} .0372695{col 57}{space 1}    0.92{col 66}{space 3}0.360{col 74}{space 4}-.0389588{col 87}{space 3} .1071897
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0343039{col 46}{space 2} .0380208{col 57}{space 1}    0.90{col 66}{space 3}0.367{col 74}{space 4}-.0402435{col 87}{space 3} .1088513
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0076693{col 46}{space 2} .0404171{col 57}{space 1}   -0.19{col 66}{space 3}0.850{col 74}{space 4}-.0869151{col 87}{space 3} .0715764
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .1058785{col 46}{space 2} .0542767{col 57}{space 1}    1.95{col 66}{space 3}0.051{col 74}{space 4}-.0005417{col 87}{space 3} .2122988
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0266774{col 46}{space 2} .0627781{col 57}{space 1}   -0.42{col 66}{space 3}0.671{col 74}{space 4}-.1497664{col 87}{space 3} .0964116
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0243475{col 46}{space 2} .0103407{col 57}{space 1}    2.35{col 66}{space 3}0.019{col 74}{space 4} .0040724{col 87}{space 3} .0446226
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0070222{col 46}{space 2} .0147585{col 57}{space 1}    0.48{col 66}{space 3}0.634{col 74}{space 4}-.0219147{col 87}{space 3} .0359591
+{txt}{space 30}3  {c |}{col 34}{res}{space 2} .0106799{col 46}{space 2}  .013033{col 57}{space 1}    0.82{col 66}{space 3}0.413{col 74}{space 4}-.0148738{col 87}{space 3} .0362336
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0026168{col 46}{space 2} .0158291{col 57}{space 1}   -0.17{col 66}{space 3}0.869{col 74}{space 4} -.033653{col 87}{space 3} .0284193
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0001231{col 46}{space 2}  .014938{col 57}{space 1}   -0.01{col 66}{space 3}0.993{col 74}{space 4}-.0294119{col 87}{space 3} .0291658
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0160285{col 46}{space 2} .0152289{col 57}{space 1}    1.05{col 66}{space 3}0.293{col 74}{space 4}-.0138307{col 87}{space 3} .0458877
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0202637{col 46}{space 2} .0141937{col 57}{space 1}    1.43{col 66}{space 3}0.153{col 74}{space 4}-.0075659{col 87}{space 3} .0480933
+{txt}{space 30}8  {c |}{col 34}{res}{space 2}  .014572{col 46}{space 2} .0132652{col 57}{space 1}    1.10{col 66}{space 3}0.272{col 74}{space 4} -.011437{col 87}{space 3}  .040581
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0256824{col 46}{space 2} .0126563{col 57}{space 1}    2.03{col 66}{space 3}0.043{col 74}{space 4} .0008673{col 87}{space 3} .0504975
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0159569{col 46}{space 2} .0134939{col 57}{space 1}    1.18{col 66}{space 3}0.237{col 74}{space 4}-.0105006{col 87}{space 3} .0424145
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0106687{col 46}{space 2} .0136657{col 57}{space 1}    0.78{col 66}{space 3}0.435{col 74}{space 4}-.0161256{col 87}{space 3} .0374631
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0049935{col 46}{space 2} .0164322{col 57}{space 1}    0.30{col 66}{space 3}0.761{col 74}{space 4} -.027225{col 87}{space 3} .0372121
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.27677{col 46}{space 2} .1093947{col 57}{space 1}  112.22{col 66}{space 3}0.000{col 74}{space 4} 12.06227{col 87}{space 3} 12.49126
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     3228{col 28}{space 1}     3228{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      429{col 28}{space 1}        1{col 40}{result}{space 1}      428{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store ring_500
+{txt}
+{com}. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 71 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 14 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    53,476
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}   6061{txt}){col 67}= {res}      6.37
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5320
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4667
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0133
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     6,062{txt}{col 51}Root MSE{col 67}= {res}    0.3749
+
+{txt}{ralign 98:(Std. err. adjusted for {res:6,062} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0173784{col 46}{space 2} .0087895{col 57}{space 1}    1.98{col 66}{space 3}0.048{col 74}{space 4} .0001478{col 87}{space 3}  .034609
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 4.32e-06{col 46}{space 2} 6.89e-06{col 57}{space 1}    0.63{col 66}{space 3}0.531{col 74}{space 4}-9.19e-06{col 87}{space 3} .0000178
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .1596151{col 46}{space 2} .0943926{col 57}{space 1}    1.69{col 66}{space 3}0.091{col 74}{space 4}-.0254279{col 87}{space 3}  .344658
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.0576567{col 46}{space 2} .0994559{col 57}{space 1}   -0.58{col 66}{space 3}0.562{col 74}{space 4}-.2526255{col 87}{space 3} .1373122
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .1192001{col 46}{space 2} .0953209{col 57}{space 1}    1.25{col 66}{space 3}0.211{col 74}{space 4}-.0676626{col 87}{space 3} .3060629
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2}-.0050917{col 46}{space 2}  .014478{col 57}{space 1}   -0.35{col 66}{space 3}0.725{col 74}{space 4}-.0334737{col 87}{space 3} .0232903
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0314629{col 46}{space 2} .0193561{col 57}{space 1}   -1.63{col 66}{space 3}0.104{col 74}{space 4}-.0694078{col 87}{space 3}  .006482
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0044098{col 46}{space 2} .0126064{col 57}{space 1}    0.35{col 66}{space 3}0.726{col 74}{space 4}-.0203033{col 87}{space 3} .0291228
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} -.006717{col 46}{space 2} .0129358{col 57}{space 1}   -0.52{col 66}{space 3}0.604{col 74}{space 4}-.0320757{col 87}{space 3} .0186418
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0119168{col 46}{space 2} .0350782{col 57}{space 1}   -0.34{col 66}{space 3}0.734{col 74}{space 4}-.0806826{col 87}{space 3} .0568491
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0238338{col 46}{space 2} .0138899{col 57}{space 1}   -1.72{col 66}{space 3}0.086{col 74}{space 4} -.051063{col 87}{space 3} .0033953
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0018928{col 46}{space 2} .0115533{col 57}{space 1}    0.16{col 66}{space 3}0.870{col 74}{space 4}-.0207557{col 87}{space 3} .0245414
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0012227{col 46}{space 2} .0002935{col 57}{space 1}    4.17{col 66}{space 3}0.000{col 74}{space 4} .0006473{col 87}{space 3} .0017981
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0363986{col 46}{space 2}  .005708{col 57}{space 1}    6.38{col 66}{space 3}0.000{col 74}{space 4} .0252089{col 87}{space 3} .0475882
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0128591{col 46}{space 2} .0114838{col 57}{space 1}   -1.12{col 66}{space 3}0.263{col 74}{space 4}-.0353713{col 87}{space 3} .0096532
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0236971{col 46}{space 2} .0161383{col 57}{space 1}   -1.47{col 66}{space 3}0.142{col 74}{space 4}-.0553339{col 87}{space 3} .0079397
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2} -.003793{col 46}{space 2} .0132746{col 57}{space 1}   -0.29{col 66}{space 3}0.775{col 74}{space 4} -.029816{col 87}{space 3}   .02223
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0198991{col 46}{space 2}  .016238{col 57}{space 1}   -1.23{col 66}{space 3}0.220{col 74}{space 4}-.0517313{col 87}{space 3} .0119331
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0137458{col 46}{space 2} .0139726{col 57}{space 1}   -0.98{col 66}{space 3}0.325{col 74}{space 4}-.0411371{col 87}{space 3} .0136455
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0039417{col 46}{space 2}  .017761{col 57}{space 1}   -0.22{col 66}{space 3}0.824{col 74}{space 4}-.0387597{col 87}{space 3} .0308763
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0069728{col 46}{space 2} .0153403{col 57}{space 1}   -0.45{col 66}{space 3}0.649{col 74}{space 4}-.0370453{col 87}{space 3} .0230997
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2}-.0005279{col 46}{space 2} .0162489{col 57}{space 1}   -0.03{col 66}{space 3}0.974{col 74}{space 4}-.0323816{col 87}{space 3} .0313257
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}-.0148085{col 46}{space 2} .0331616{col 57}{space 1}   -0.45{col 66}{space 3}0.655{col 74}{space 4} -.079817{col 87}{space 3}    .0502
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} -.011869{col 46}{space 2} .0181822{col 57}{space 1}   -0.65{col 66}{space 3}0.514{col 74}{space 4}-.0475126{col 87}{space 3} .0237747
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2}  .002784{col 46}{space 2} .0211061{col 57}{space 1}    0.13{col 66}{space 3}0.895{col 74}{space 4}-.0385915{col 87}{space 3} .0441595
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0570133{col 46}{space 2} .0263136{col 57}{space 1}    2.17{col 66}{space 3}0.030{col 74}{space 4} .0054294{col 87}{space 3} .1085972
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.1327929{col 46}{space 2} .0262794{col 57}{space 1}   -5.05{col 66}{space 3}0.000{col 74}{space 4}-.1843099{col 87}{space 3}-.0812759
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2} .0057654{col 46}{space 2} .0119261{col 57}{space 1}    0.48{col 66}{space 3}0.629{col 74}{space 4}-.0176141{col 87}{space 3} .0291448
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0077197{col 46}{space 2} .0721693{col 57}{space 1}    0.11{col 66}{space 3}0.915{col 74}{space 4}-.1337578{col 87}{space 3} .1491972
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2} .0057144{col 46}{space 2} .0907988{col 57}{space 1}    0.06{col 66}{space 3}0.950{col 74}{space 4}-.1722836{col 87}{space 3} .1837124
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2} .0102367{col 46}{space 2} .0258867{col 57}{space 1}    0.40{col 66}{space 3}0.693{col 74}{space 4}-.0405103{col 87}{space 3} .0609838
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0052423{col 46}{space 2} .0261708{col 57}{space 1}   -0.20{col 66}{space 3}0.841{col 74}{space 4}-.0565465{col 87}{space 3} .0460618
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0159233{col 46}{space 2}   .02721{col 57}{space 1}    0.59{col 66}{space 3}0.558{col 74}{space 4} -.037418{col 87}{space 3} .0692646
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0165766{col 46}{space 2} .0275024{col 57}{space 1}    0.60{col 66}{space 3}0.547{col 74}{space 4} -.037338{col 87}{space 3} .0704911
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0224381{col 46}{space 2} .0292162{col 57}{space 1}   -0.77{col 66}{space 3}0.443{col 74}{space 4}-.0797122{col 87}{space 3} .0348361
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0245186{col 46}{space 2} .0409461{col 57}{space 1}    0.60{col 66}{space 3}0.549{col 74}{space 4}-.0557503{col 87}{space 3} .1047875
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0548808{col 46}{space 2}  .047233{col 57}{space 1}   -1.16{col 66}{space 3}0.245{col 74}{space 4}-.1474743{col 87}{space 3} .0377126
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0295812{col 46}{space 2} .0071454{col 57}{space 1}    4.14{col 66}{space 3}0.000{col 74}{space 4} .0155736{col 87}{space 3} .0435887
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0132353{col 46}{space 2} .0096049{col 57}{space 1}    1.38{col 66}{space 3}0.168{col 74}{space 4}-.0055937{col 87}{space 3} .0320643
+{txt}{space 30}3  {c |}{col 34}{res}{space 2}-.0018572{col 46}{space 2} .0090155{col 57}{space 1}   -0.21{col 66}{space 3}0.837{col 74}{space 4}-.0195308{col 87}{space 3} .0158165
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0068794{col 46}{space 2} .0107791{col 57}{space 1}   -0.64{col 66}{space 3}0.523{col 74}{space 4}-.0280104{col 87}{space 3} .0142515
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0129904{col 46}{space 2} .0107183{col 57}{space 1}   -1.21{col 66}{space 3}0.226{col 74}{space 4}-.0340022{col 87}{space 3} .0080214
+{txt}{space 30}6  {c |}{col 34}{res}{space 2}  .016462{col 46}{space 2} .0099778{col 57}{space 1}    1.65{col 66}{space 3}0.099{col 74}{space 4}-.0030981{col 87}{space 3} .0360221
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0148741{col 46}{space 2} .0098864{col 57}{space 1}    1.50{col 66}{space 3}0.133{col 74}{space 4}-.0045067{col 87}{space 3}  .034255
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0178372{col 46}{space 2} .0091481{col 57}{space 1}    1.95{col 66}{space 3}0.051{col 74}{space 4}-.0000964{col 87}{space 3} .0357707
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0243219{col 46}{space 2} .0090046{col 57}{space 1}    2.70{col 66}{space 3}0.007{col 74}{space 4} .0066696{col 87}{space 3} .0419742
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0134989{col 46}{space 2}  .009164{col 57}{space 1}    1.47{col 66}{space 3}0.141{col 74}{space 4}-.0044658{col 87}{space 3} .0314636
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0030428{col 46}{space 2} .0095216{col 57}{space 1}    0.32{col 66}{space 3}0.749{col 74}{space 4}-.0156229{col 87}{space 3} .0217086
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0058352{col 46}{space 2} .0107394{col 57}{space 1}    0.54{col 66}{space 3}0.587{col 74}{space 4}-.0152178{col 87}{space 3} .0268883
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.35112{col 46}{space 2} .1006532{col 57}{space 1}  122.71{col 66}{space 3}0.000{col 74}{space 4}  12.1538{col 87}{space 3} 12.54843
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     6062{col 28}{space 1}     6062{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      441{col 28}{space 1}        1{col 40}{result}{space 1}      440{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store ring_1500
+{txt}
+{com}. 
+. * ============================================================================
+. * ROBUSTNESS: OA FE (Treatment vs Ring)
+. * ============================================================================
+. * Table 4, column (3): output-area fixed effects robustness.
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(oa_id station_year) vce(cluster oa_id)
+{res}{txt}(dropped 28 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 89 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    46,161
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}   2561{txt}){col 67}= {res}      5.59
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.3866
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.3432
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0237
+{txt}{col 1}Number of clusters ({res}oa_id{txt}) {col 30}= {res}     2,562{txt}{col 51}Root MSE{col 67}= {res}    0.4310
+
+{txt}{ralign 98:(Std. err. adjusted for {res:2,562} clusters in {res:oa_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0274387{col 46}{space 2} .0116548{col 57}{space 1}    2.35{col 66}{space 3}0.019{col 74}{space 4}  .004585{col 87}{space 3} .0502924
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2}-1.75e-06{col 46}{space 2} .0000103{col 57}{space 1}   -0.17{col 66}{space 3}0.865{col 74}{space 4} -.000022{col 87}{space 3} .0000185
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} -.005128{col 46}{space 2} .1304572{col 57}{space 1}   -0.04{col 66}{space 3}0.969{col 74}{space 4}-.2609403{col 87}{space 3} .2506843
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.0782382{col 46}{space 2} .1341388{col 57}{space 1}   -0.58{col 66}{space 3}0.560{col 74}{space 4}-.3412697{col 87}{space 3} .1847933
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2}-.0323117{col 46}{space 2} .1321947{col 57}{space 1}   -0.24{col 66}{space 3}0.807{col 74}{space 4} -.291531{col 87}{space 3} .2269076
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0145181{col 46}{space 2} .0218695{col 57}{space 1}    0.66{col 66}{space 3}0.507{col 74}{space 4}-.0283655{col 87}{space 3} .0574018
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0354486{col 46}{space 2} .0261693{col 57}{space 1}   -1.35{col 66}{space 3}0.176{col 74}{space 4}-.0867638{col 87}{space 3} .0158665
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2}-.0079612{col 46}{space 2} .0181261{col 57}{space 1}   -0.44{col 66}{space 3}0.661{col 74}{space 4}-.0435045{col 87}{space 3} .0275822
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2}-.0338837{col 46}{space 2} .0190518{col 57}{space 1}   -1.78{col 66}{space 3}0.075{col 74}{space 4}-.0712423{col 87}{space 3} .0034749
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}   .00893{col 46}{space 2} .0564378{col 57}{space 1}    0.16{col 66}{space 3}0.874{col 74}{space 4}-.1017384{col 87}{space 3} .1195983
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0534523{col 46}{space 2} .0193207{col 57}{space 1}   -2.77{col 66}{space 3}0.006{col 74}{space 4} -.091338{col 87}{space 3}-.0155666
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2}-.0002194{col 46}{space 2} .0164512{col 57}{space 1}   -0.01{col 66}{space 3}0.989{col 74}{space 4}-.0324785{col 87}{space 3} .0320397
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0015349{col 46}{space 2}  .000314{col 57}{space 1}    4.89{col 66}{space 3}0.000{col 74}{space 4} .0009193{col 87}{space 3} .0021505
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2}  .029342{col 46}{space 2} .0062616{col 57}{space 1}    4.69{col 66}{space 3}0.000{col 74}{space 4} .0170637{col 87}{space 3} .0416203
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2} -.024876{col 46}{space 2} .0145543{col 57}{space 1}   -1.71{col 66}{space 3}0.088{col 74}{space 4}-.0534154{col 87}{space 3} .0036634
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0735128{col 46}{space 2} .0179625{col 57}{space 1}   -4.09{col 66}{space 3}0.000{col 74}{space 4}-.1087353{col 87}{space 3}-.0382904
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0761375{col 46}{space 2} .0171242{col 57}{space 1}   -4.45{col 66}{space 3}0.000{col 74}{space 4}-.1097163{col 87}{space 3}-.0425588
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0841063{col 46}{space 2} .0222609{col 57}{space 1}   -3.78{col 66}{space 3}0.000{col 74}{space 4}-.1277576{col 87}{space 3}-.0404551
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2} -.064332{col 46}{space 2} .0190694{col 57}{space 1}   -3.37{col 66}{space 3}0.001{col 74}{space 4} -.101725{col 87}{space 3} -.026939
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0677156{col 46}{space 2} .0234565{col 57}{space 1}   -2.89{col 66}{space 3}0.004{col 74}{space 4}-.1137111{col 87}{space 3}  -.02172
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0196989{col 46}{space 2} .0201006{col 57}{space 1}   -0.98{col 66}{space 3}0.327{col 74}{space 4} -.059114{col 87}{space 3} .0197162
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2}-.0037773{col 46}{space 2} .0223706{col 57}{space 1}   -0.17{col 66}{space 3}0.866{col 74}{space 4}-.0476435{col 87}{space 3}  .040089
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}-.0168884{col 46}{space 2} .0337298{col 57}{space 1}   -0.50{col 66}{space 3}0.617{col 74}{space 4}-.0830288{col 87}{space 3}  .049252
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} .0062487{col 46}{space 2}  .024607{col 57}{space 1}    0.25{col 66}{space 3}0.800{col 74}{space 4}-.0420029{col 87}{space 3} .0545004
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0083244{col 46}{space 2} .0329382{col 57}{space 1}    0.25{col 66}{space 3}0.800{col 74}{space 4}-.0562637{col 87}{space 3} .0729125
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0798314{col 46}{space 2} .0394323{col 57}{space 1}    2.02{col 66}{space 3}0.043{col 74}{space 4}  .002509{col 87}{space 3} .1571537
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2} .0346519{col 46}{space 2} .1183174{col 57}{space 1}    0.29{col 66}{space 3}0.770{col 74}{space 4}-.1973557{col 87}{space 3} .2666594
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2} .0019964{col 46}{space 2} .0156518{col 57}{space 1}    0.13{col 66}{space 3}0.899{col 74}{space 4}-.0286951{col 87}{space 3} .0326878
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0503931{col 46}{space 2} .0536501{col 57}{space 1}    0.94{col 66}{space 3}0.348{col 74}{space 4}-.0548089{col 87}{space 3} .1555951
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.0510676{col 46}{space 2} .0942821{col 57}{space 1}   -0.54{col 66}{space 3}0.588{col 74}{space 4}-.2359444{col 87}{space 3} .1338092
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2} .0294376{col 46}{space 2} .0365007{col 57}{space 1}    0.81{col 66}{space 3}0.420{col 74}{space 4}-.0421363{col 87}{space 3} .1010114
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2} .0243994{col 46}{space 2} .0365141{col 57}{space 1}    0.67{col 66}{space 3}0.504{col 74}{space 4}-.0472007{col 87}{space 3} .0959995
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0173167{col 46}{space 2} .0379272{col 57}{space 1}    0.46{col 66}{space 3}0.648{col 74}{space 4}-.0570543{col 87}{space 3} .0916878
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0549835{col 46}{space 2}   .03802{col 57}{space 1}    1.45{col 66}{space 3}0.148{col 74}{space 4}-.0195696{col 87}{space 3} .1295366
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2} .0228688{col 46}{space 2} .0389111{col 57}{space 1}    0.59{col 66}{space 3}0.557{col 74}{space 4}-.0534316{col 87}{space 3} .0991692
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0713189{col 46}{space 2} .0486914{col 57}{space 1}    1.46{col 66}{space 3}0.143{col 74}{space 4}-.0241597{col 87}{space 3} .1667975
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0124039{col 46}{space 2} .0572245{col 57}{space 1}   -0.22{col 66}{space 3}0.828{col 74}{space 4}-.1246148{col 87}{space 3} .0998071
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0250093{col 46}{space 2}  .009842{col 57}{space 1}    2.54{col 66}{space 3}0.011{col 74}{space 4} .0057102{col 87}{space 3} .0443084
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0114074{col 46}{space 2} .0123838{col 57}{space 1}    0.92{col 66}{space 3}0.357{col 74}{space 4}-.0128759{col 87}{space 3} .0356908
+{txt}{space 30}3  {c |}{col 34}{res}{space 2} .0092743{col 46}{space 2} .0108631{col 57}{space 1}    0.85{col 66}{space 3}0.393{col 74}{space 4}-.0120271{col 87}{space 3} .0305757
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0029054{col 46}{space 2} .0131371{col 57}{space 1}   -0.22{col 66}{space 3}0.825{col 74}{space 4}-.0286659{col 87}{space 3} .0228551
+{txt}{space 30}5  {c |}{col 34}{res}{space 2} .0059004{col 46}{space 2} .0127046{col 57}{space 1}    0.46{col 66}{space 3}0.642{col 74}{space 4}-.0190121{col 87}{space 3} .0308128
+{txt}{space 30}6  {c |}{col 34}{res}{space 2}  .029088{col 46}{space 2} .0116669{col 57}{space 1}    2.49{col 66}{space 3}0.013{col 74}{space 4} .0062106{col 87}{space 3} .0519655
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0227231{col 46}{space 2} .0121474{col 57}{space 1}    1.87{col 66}{space 3}0.062{col 74}{space 4}-.0010967{col 87}{space 3} .0465429
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0277431{col 46}{space 2} .0111914{col 57}{space 1}    2.48{col 66}{space 3}0.013{col 74}{space 4}  .005798{col 87}{space 3} .0496881
+{txt}{space 30}9  {c |}{col 34}{res}{space 2}  .023983{col 46}{space 2} .0107721{col 57}{space 1}    2.23{col 66}{space 3}0.026{col 74}{space 4} .0028601{col 87}{space 3}  .045106
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0086501{col 46}{space 2} .0116024{col 57}{space 1}    0.75{col 66}{space 3}0.456{col 74}{space 4} -.014101{col 87}{space 3} .0314012
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0168756{col 46}{space 2} .0116821{col 57}{space 1}    1.44{col 66}{space 3}0.149{col 74}{space 4}-.0060317{col 87}{space 3} .0397829
+{txt}{space 29}12  {c |}{col 34}{res}{space 2}   .00676{col 46}{space 2} .0138927{col 57}{space 1}    0.49{col 66}{space 3}0.627{col 74}{space 4} -.020482{col 87}{space 3}  .034002
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.50599{col 46}{space 2} .1379519{col 57}{space 1}   90.65{col 66}{space 3}0.000{col 74}{space 4} 12.23548{col 87}{space 3}  12.7765
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}        oa_id{col 15}{c |}{space 1}     2562{col 28}{space 1}     2562{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      440{col 28}{space 1}        1{col 40}{result}{space 1}      439{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store oa_fe
+{txt}
+{com}. 
+. quietly {c -(}
+{txt}
+{com}. 
+. * ============================================================================
+. * ROBUSTNESS: Station x Ring FE (Treatment vs Ring)
+. * Use 500m distance bins and keep only station-ring cells with pre and post data.
+. * ============================================================================
+. * Table 4, column (4): station x ring fixed effects robustness.
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(station_ring station_year) vce(cluster station_ring)
+{res}{txt}(dropped 8 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 10 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    47,235
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}    204{txt}){col 67}= {res}     16.57
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.2186
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.2070
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0575
+{txt}{col 1}Number of clusters ({res}station_ring{txt}) {col 30}= {res}       205{txt}{col 51}Root MSE{col 67}= {res}    0.4825
+
+{txt}{ralign 98:(Std. err. adjusted for {res:205} clusters in {res:station_ring})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0278698{col 46}{space 2} .0122543{col 57}{space 1}    2.27{col 66}{space 3}0.024{col 74}{space 4} .0037085{col 87}{space 3}  .052031
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2}-.0000158{col 46}{space 2}  .000012{col 57}{space 1}   -1.32{col 66}{space 3}0.188{col 74}{space 4}-.0000394{col 87}{space 3} 7.80e-06
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .0230812{col 46}{space 2} .0916396{col 57}{space 1}    0.25{col 66}{space 3}0.801{col 74}{space 4} -.157601{col 87}{space 3} .2037633
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.0555775{col 46}{space 2} .0990525{col 57}{space 1}   -0.56{col 66}{space 3}0.575{col 74}{space 4}-.2508754{col 87}{space 3} .1397203
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2}-.0246795{col 46}{space 2} .0943235{col 57}{space 1}   -0.26{col 66}{space 3}0.794{col 74}{space 4}-.2106535{col 87}{space 3} .1612944
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0094561{col 46}{space 2} .0294121{col 57}{space 1}    0.32{col 66}{space 3}0.748{col 74}{space 4}-.0485347{col 87}{space 3} .0674468
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0507681{col 46}{space 2} .0267927{col 57}{space 1}   -1.89{col 66}{space 3}0.060{col 74}{space 4}-.1035943{col 87}{space 3}  .002058
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0056936{col 46}{space 2} .0198797{col 57}{space 1}    0.29{col 66}{space 3}0.775{col 74}{space 4}-.0335025{col 87}{space 3} .0448896
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2}-.0259742{col 46}{space 2} .0202357{col 57}{space 1}   -1.28{col 66}{space 3}0.201{col 74}{space 4}-.0658721{col 87}{space 3} .0139237
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2} .0084289{col 46}{space 2} .0526472{col 57}{space 1}    0.16{col 66}{space 3}0.873{col 74}{space 4}-.0953736{col 87}{space 3} .1122314
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0377622{col 46}{space 2}  .020903{col 57}{space 1}   -1.81{col 66}{space 3}0.072{col 74}{space 4}-.0789757{col 87}{space 3} .0034514
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0092021{col 46}{space 2} .0204409{col 57}{space 1}    0.45{col 66}{space 3}0.653{col 74}{space 4}-.0311004{col 87}{space 3} .0495046
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0030045{col 46}{space 2}  .000374{col 57}{space 1}    8.03{col 66}{space 3}0.000{col 74}{space 4} .0022672{col 87}{space 3} .0037419
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0148121{col 46}{space 2} .0073375{col 57}{space 1}    2.02{col 66}{space 3}0.045{col 74}{space 4}  .000345{col 87}{space 3} .0292792
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0878514{col 46}{space 2} .0178692{col 57}{space 1}   -4.92{col 66}{space 3}0.000{col 74}{space 4}-.1230834{col 87}{space 3}-.0526194
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0987987{col 46}{space 2} .0218194{col 57}{space 1}   -4.53{col 66}{space 3}0.000{col 74}{space 4} -.141819{col 87}{space 3}-.0557783
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0794377{col 46}{space 2} .0212654{col 57}{space 1}   -3.74{col 66}{space 3}0.000{col 74}{space 4} -.121366{col 87}{space 3}-.0375095
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0915808{col 46}{space 2} .0242027{col 57}{space 1}   -3.78{col 66}{space 3}0.000{col 74}{space 4}-.1393003{col 87}{space 3}-.0438613
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.1208711{col 46}{space 2} .0225135{col 57}{space 1}   -5.37{col 66}{space 3}0.000{col 74}{space 4}-.1652601{col 87}{space 3}-.0764821
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2} -.154699{col 46}{space 2} .0323184{col 57}{space 1}   -4.79{col 66}{space 3}0.000{col 74}{space 4}-.2184199{col 87}{space 3} -.090978
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0402407{col 46}{space 2} .0232244{col 57}{space 1}   -1.73{col 66}{space 3}0.085{col 74}{space 4}-.0860313{col 87}{space 3} .0055499
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2}-.0445135{col 46}{space 2} .0235155{col 57}{space 1}   -1.89{col 66}{space 3}0.060{col 74}{space 4}-.0908782{col 87}{space 3} .0018511
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}-.1074075{col 46}{space 2} .0424433{col 57}{space 1}   -2.53{col 66}{space 3}0.012{col 74}{space 4}-.1910912{col 87}{space 3}-.0237238
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2}-.0524538{col 46}{space 2} .0258121{col 57}{space 1}   -2.03{col 66}{space 3}0.043{col 74}{space 4}-.1033465{col 87}{space 3}-.0015612
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0383951{col 46}{space 2} .0293677{col 57}{space 1}    1.31{col 66}{space 3}0.193{col 74}{space 4}-.0195081{col 87}{space 3} .0962982
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0938017{col 46}{space 2} .0274558{col 57}{space 1}    3.42{col 66}{space 3}0.001{col 74}{space 4} .0396682{col 87}{space 3} .1479352
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.1531547{col 46}{space 2} .2528916{col 57}{space 1}   -0.61{col 66}{space 3}0.545{col 74}{space 4}-.6517712{col 87}{space 3} .3454618
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}  .017606{col 46}{space 2}  .016033{col 57}{space 1}    1.10{col 66}{space 3}0.273{col 74}{space 4}-.0140056{col 87}{space 3} .0492177
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0787393{col 46}{space 2} .0633734{col 57}{space 1}    1.24{col 66}{space 3}0.215{col 74}{space 4}-.0462116{col 87}{space 3} .2036901
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2} .0899093{col 46}{space 2} .1450326{col 57}{space 1}    0.62{col 66}{space 3}0.536{col 74}{space 4}-.1960458{col 87}{space 3} .3758644
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2} .0635715{col 46}{space 2} .0468265{col 57}{space 1}    1.36{col 66}{space 3}0.176{col 74}{space 4}-.0287545{col 87}{space 3} .1558975
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}  .061717{col 46}{space 2} .0469512{col 57}{space 1}    1.31{col 66}{space 3}0.190{col 74}{space 4}-.0308548{col 87}{space 3} .1542889
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0270171{col 46}{space 2} .0501618{col 57}{space 1}    0.54{col 66}{space 3}0.591{col 74}{space 4}-.0718849{col 87}{space 3} .1259191
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .1227569{col 46}{space 2} .0516632{col 57}{space 1}    2.38{col 66}{space 3}0.018{col 74}{space 4} .0208946{col 87}{space 3} .2246191
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2} .0469424{col 46}{space 2} .0497155{col 57}{space 1}    0.94{col 66}{space 3}0.346{col 74}{space 4}-.0510796{col 87}{space 3} .1449645
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0718586{col 46}{space 2} .0577699{col 57}{space 1}    1.24{col 66}{space 3}0.215{col 74}{space 4} -.042044{col 87}{space 3} .1857611
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2} .0439336{col 46}{space 2} .0624568{col 57}{space 1}    0.70{col 66}{space 3}0.483{col 74}{space 4}  -.07921{col 87}{space 3} .1670772
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0196532{col 46}{space 2} .0096201{col 57}{space 1}    2.04{col 66}{space 3}0.042{col 74}{space 4} .0006855{col 87}{space 3} .0386208
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0042214{col 46}{space 2} .0136424{col 57}{space 1}    0.31{col 66}{space 3}0.757{col 74}{space 4}-.0226768{col 87}{space 3} .0311196
+{txt}{space 30}3  {c |}{col 34}{res}{space 2}  .005128{col 46}{space 2} .0115204{col 57}{space 1}    0.45{col 66}{space 3}0.657{col 74}{space 4}-.0175862{col 87}{space 3} .0278423
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0072507{col 46}{space 2} .0136076{col 57}{space 1}   -0.53{col 66}{space 3}0.595{col 74}{space 4}-.0340803{col 87}{space 3}  .019579
+{txt}{space 30}5  {c |}{col 34}{res}{space 2} .0009814{col 46}{space 2} .0124883{col 57}{space 1}    0.08{col 66}{space 3}0.937{col 74}{space 4}-.0236414{col 87}{space 3} .0256041
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0445629{col 46}{space 2} .0118872{col 57}{space 1}    3.75{col 66}{space 3}0.000{col 74}{space 4} .0211253{col 87}{space 3} .0680005
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0192971{col 46}{space 2} .0132934{col 57}{space 1}    1.45{col 66}{space 3}0.148{col 74}{space 4} -.006913{col 87}{space 3} .0455073
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0213916{col 46}{space 2} .0104049{col 57}{space 1}    2.06{col 66}{space 3}0.041{col 74}{space 4} .0008767{col 87}{space 3} .0419065
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0342351{col 46}{space 2} .0116627{col 57}{space 1}    2.94{col 66}{space 3}0.004{col 74}{space 4} .0112401{col 87}{space 3} .0572301
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0013179{col 46}{space 2} .0124182{col 57}{space 1}    0.11{col 66}{space 3}0.916{col 74}{space 4}-.0231665{col 87}{space 3} .0258024
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0120684{col 46}{space 2} .0118373{col 57}{space 1}    1.02{col 66}{space 3}0.309{col 74}{space 4}-.0112707{col 87}{space 3} .0354075
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0132021{col 46}{space 2} .0160071{col 57}{space 1}    0.82{col 66}{space 3}0.410{col 74}{space 4}-.0183585{col 87}{space 3} .0447627
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.41729{col 46}{space 2} .1066271{col 57}{space 1}  116.46{col 66}{space 3}0.000{col 74}{space 4} 12.20706{col 87}{space 3} 12.62752
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text} station_ring{col 15}{c |}{space 1}      205{col 28}{space 1}      205{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      441{col 28}{space 1}        1{col 40}{result}{space 1}      440{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store station_ring_fe
+{txt}
+{com}. 
+. quietly {c -(}
+{txt}
+{com}. 
+. * ============================================================================
+. * ROBUSTNESS: Post-COVID Only (post = Jan 2023 onwards)
+. * ============================================================================
+. * Table 4, column (7): exclude 2021-2022 and redefine post from 2023 onward.
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 77 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 16 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    32,670
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}   4398{txt}){col 67}= {res}      4.40
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5242
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4424
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0134
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     4,399{txt}{col 51}Root MSE{col 67}= {res}    0.3817
+
+{txt}{ralign 98:(Std. err. adjusted for {res:4,399} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0283756{col 46}{space 2} .0125744{col 57}{space 1}    2.26{col 66}{space 3}0.024{col 74}{space 4} .0037235{col 87}{space 3} .0530278
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 2.94e-06{col 46}{space 2} 7.41e-06{col 57}{space 1}    0.40{col 66}{space 3}0.691{col 74}{space 4}-.0000116{col 87}{space 3} .0000175
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2}   .15528{col 46}{space 2} .1157279{col 57}{space 1}    1.34{col 66}{space 3}0.180{col 74}{space 4}-.0716048{col 87}{space 3} .3821649
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.0801047{col 46}{space 2} .1230353{col 57}{space 1}   -0.65{col 66}{space 3}0.515{col 74}{space 4}-.3213159{col 87}{space 3} .1611065
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .1170745{col 46}{space 2} .1171548{col 57}{space 1}    1.00{col 66}{space 3}0.318{col 74}{space 4}-.1126078{col 87}{space 3} .3467569
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0150169{col 46}{space 2} .0187323{col 57}{space 1}    0.80{col 66}{space 3}0.423{col 74}{space 4}-.0217078{col 87}{space 3} .0517416
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0278574{col 46}{space 2} .0231921{col 57}{space 1}   -1.20{col 66}{space 3}0.230{col 74}{space 4}-.0733256{col 87}{space 3} .0176109
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0211009{col 46}{space 2} .0161718{col 57}{space 1}    1.30{col 66}{space 3}0.192{col 74}{space 4}-.0106038{col 87}{space 3} .0528057
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0141204{col 46}{space 2} .0167303{col 57}{space 1}    0.84{col 66}{space 3}0.399{col 74}{space 4}-.0186794{col 87}{space 3} .0469201
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0232921{col 46}{space 2} .0478676{col 57}{space 1}   -0.49{col 66}{space 3}0.627{col 74}{space 4}-.1171368{col 87}{space 3} .0705525
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0065982{col 46}{space 2} .0172323{col 57}{space 1}   -0.38{col 66}{space 3}0.702{col 74}{space 4}-.0403823{col 87}{space 3} .0271858
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0174236{col 46}{space 2} .0152699{col 57}{space 1}    1.14{col 66}{space 3}0.254{col 74}{space 4}-.0125132{col 87}{space 3} .0473603
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0012752{col 46}{space 2}  .000331{col 57}{space 1}    3.85{col 66}{space 3}0.000{col 74}{space 4} .0006263{col 87}{space 3}  .001924
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0385662{col 46}{space 2} .0078414{col 57}{space 1}    4.92{col 66}{space 3}0.000{col 74}{space 4} .0231932{col 87}{space 3} .0539393
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0195628{col 46}{space 2} .0158407{col 57}{space 1}   -1.23{col 66}{space 3}0.217{col 74}{space 4}-.0506186{col 87}{space 3} .0114929
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0307405{col 46}{space 2}  .020021{col 57}{space 1}   -1.54{col 66}{space 3}0.125{col 74}{space 4}-.0699918{col 87}{space 3} .0085108
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0181298{col 46}{space 2} .0172776{col 57}{space 1}   -1.05{col 66}{space 3}0.294{col 74}{space 4}-.0520026{col 87}{space 3} .0157429
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0378014{col 46}{space 2} .0212308{col 57}{space 1}   -1.78{col 66}{space 3}0.075{col 74}{space 4}-.0794244{col 87}{space 3} .0038217
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0163285{col 46}{space 2} .0191325{col 57}{space 1}   -0.85{col 66}{space 3}0.393{col 74}{space 4}-.0538378{col 87}{space 3} .0211809
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0098256{col 46}{space 2} .0201368{col 57}{space 1}   -0.49{col 66}{space 3}0.626{col 74}{space 4}-.0493038{col 87}{space 3} .0296526
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0038759{col 46}{space 2} .0202485{col 57}{space 1}   -0.19{col 66}{space 3}0.848{col 74}{space 4}-.0435731{col 87}{space 3} .0358214
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0178575{col 46}{space 2} .0212845{col 57}{space 1}    0.84{col 66}{space 3}0.402{col 74}{space 4}-.0238709{col 87}{space 3} .0595859
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2} .0368235{col 46}{space 2} .0418395{col 57}{space 1}    0.88{col 66}{space 3}0.379{col 74}{space 4}-.0452029{col 87}{space 3} .1188499
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} .0042902{col 46}{space 2} .0237419{col 57}{space 1}    0.18{col 66}{space 3}0.857{col 74}{space 4}-.0422559{col 87}{space 3} .0508363
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0111324{col 46}{space 2} .0252747{col 57}{space 1}    0.44{col 66}{space 3}0.660{col 74}{space 4}-.0384186{col 87}{space 3} .0606835
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0714472{col 46}{space 2} .0342014{col 57}{space 1}    2.09{col 66}{space 3}0.037{col 74}{space 4} .0043953{col 87}{space 3} .1384991
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.0051849{col 46}{space 2}  .035755{col 57}{space 1}   -0.15{col 66}{space 3}0.885{col 74}{space 4}-.0752826{col 87}{space 3} .0649129
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0159855{col 46}{space 2} .0165697{col 57}{space 1}   -0.96{col 66}{space 3}0.335{col 74}{space 4}-.0484704{col 87}{space 3} .0164993
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0954195{col 46}{space 2} .0722424{col 57}{space 1}    1.32{col 66}{space 3}0.187{col 74}{space 4}-.0462119{col 87}{space 3}  .237051
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.0268388{col 46}{space 2} .1295527{col 57}{space 1}   -0.21{col 66}{space 3}0.836{col 74}{space 4}-.2808274{col 87}{space 3} .2271498
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2} .0169331{col 46}{space 2}  .038628{col 57}{space 1}    0.44{col 66}{space 3}0.661{col 74}{space 4}-.0587973{col 87}{space 3} .0926634
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0019024{col 46}{space 2} .0389232{col 57}{space 1}   -0.05{col 66}{space 3}0.961{col 74}{space 4}-.0782115{col 87}{space 3} .0744068
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2}  .007908{col 46}{space 2} .0399028{col 57}{space 1}    0.20{col 66}{space 3}0.843{col 74}{space 4}-.0703215{col 87}{space 3} .0861375
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0211846{col 46}{space 2} .0404682{col 57}{space 1}    0.52{col 66}{space 3}0.601{col 74}{space 4}-.0581534{col 87}{space 3} .1005225
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0160372{col 46}{space 2} .0425702{col 57}{space 1}   -0.38{col 66}{space 3}0.706{col 74}{space 4}-.0994962{col 87}{space 3} .0674218
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0314315{col 46}{space 2} .0585516{col 57}{space 1}    0.54{col 66}{space 3}0.591{col 74}{space 4}-.0833591{col 87}{space 3} .1462222
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0543921{col 46}{space 2}  .069293{col 57}{space 1}   -0.78{col 66}{space 3}0.433{col 74}{space 4}-.1902414{col 87}{space 3} .0814571
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0282197{col 46}{space 2} .0098911{col 57}{space 1}    2.85{col 66}{space 3}0.004{col 74}{space 4} .0088282{col 87}{space 3} .0476113
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0135257{col 46}{space 2} .0131862{col 57}{space 1}    1.03{col 66}{space 3}0.305{col 74}{space 4}-.0123259{col 87}{space 3} .0393772
+{txt}{space 30}3  {c |}{col 34}{res}{space 2} .0033575{col 46}{space 2} .0121267{col 57}{space 1}    0.28{col 66}{space 3}0.782{col 74}{space 4}-.0204169{col 87}{space 3} .0271319
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0033227{col 46}{space 2} .0144626{col 57}{space 1}   -0.23{col 66}{space 3}0.818{col 74}{space 4}-.0316767{col 87}{space 3} .0250313
+{txt}{space 30}5  {c |}{col 34}{res}{space 2} .0004857{col 46}{space 2} .0143609{col 57}{space 1}    0.03{col 66}{space 3}0.973{col 74}{space 4}-.0276689{col 87}{space 3} .0286403
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0007824{col 46}{space 2} .0147718{col 57}{space 1}    0.05{col 66}{space 3}0.958{col 74}{space 4}-.0281778{col 87}{space 3} .0297426
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0200469{col 46}{space 2} .0124298{col 57}{space 1}    1.61{col 66}{space 3}0.107{col 74}{space 4}-.0043219{col 87}{space 3} .0444156
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0202333{col 46}{space 2}  .012037{col 57}{space 1}    1.68{col 66}{space 3}0.093{col 74}{space 4}-.0033653{col 87}{space 3}  .043832
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0200439{col 46}{space 2} .0121226{col 57}{space 1}    1.65{col 66}{space 3}0.098{col 74}{space 4}-.0037226{col 87}{space 3} .0438103
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0105181{col 46}{space 2} .0124859{col 57}{space 1}    0.84{col 66}{space 3}0.400{col 74}{space 4}-.0139606{col 87}{space 3} .0349967
+{txt}{space 29}11  {c |}{col 34}{res}{space 2}-.0004204{col 46}{space 2} .0127552{col 57}{space 1}   -0.03{col 66}{space 3}0.974{col 74}{space 4} -.025427{col 87}{space 3} .0245862
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0050447{col 46}{space 2} .0142196{col 57}{space 1}    0.35{col 66}{space 3}0.723{col 74}{space 4}-.0228328{col 87}{space 3} .0329223
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.31509{col 46}{space 2} .1252679{col 57}{space 1}   98.31{col 66}{space 3}0.000{col 74}{space 4}  12.0695{col 87}{space 3} 12.56068
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     4399{col 28}{space 1}     4399{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      349{col 28}{space 1}        1{col 40}{result}{space 1}      348{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store post_covid
+{txt}
+{com}. 
+. * ============================================================================
+. * PLACEBO: Fake Treatment Date (Jan 2018)
+. * ============================================================================
+. * Table 4, column (8): placebo treatment date in the pre-treatment years only.
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 66 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 18 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    21,426
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  49{txt},{res}   3610{txt}){col 67}= {res}      3.08
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5426
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4415
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0095
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     3,611{txt}{col 51}Root MSE{col 67}= {res}    0.3962
+
+{txt}{ralign 98:(Std. err. adjusted for {res:3,611} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 20}treated_post {c |}{col 34}{res}{space 2} .0004774{col 46}{space 2} .0156881{col 57}{space 1}    0.03{col 66}{space 3}0.976{col 74}{space 4} -.030281{col 87}{space 3} .0312357
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} .0000104{col 46}{space 2} .0000177{col 57}{space 1}    0.58{col 66}{space 3}0.559{col 74}{space 4}-.0000244{col 87}{space 3} .0000451
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .2218115{col 46}{space 2} .1154722{col 57}{space 1}    1.92{col 66}{space 3}0.055{col 74}{space 4}-.0045856{col 87}{space 3} .4482087
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.0050479{col 46}{space 2} .1265457{col 57}{space 1}   -0.04{col 66}{space 3}0.968{col 74}{space 4} -.253156{col 87}{space 3} .2430603
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2}  .172856{col 46}{space 2} .1177209{col 57}{space 1}    1.47{col 66}{space 3}0.142{col 74}{space 4}-.0579502{col 87}{space 3} .4036621
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0233797{col 46}{space 2} .0245592{col 57}{space 1}    0.95{col 66}{space 3}0.341{col 74}{space 4}-.0247717{col 87}{space 3}  .071531
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0171027{col 46}{space 2}  .030772{col 57}{space 1}   -0.56{col 66}{space 3}0.578{col 74}{space 4} -.077435{col 87}{space 3} .0432295
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0277296{col 46}{space 2} .0209999{col 57}{space 1}    1.32{col 66}{space 3}0.187{col 74}{space 4}-.0134432{col 87}{space 3} .0689025
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0311764{col 46}{space 2} .0212977{col 57}{space 1}    1.46{col 66}{space 3}0.143{col 74}{space 4}-.0105803{col 87}{space 3} .0729331
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0398636{col 46}{space 2} .0516861{col 57}{space 1}   -0.77{col 66}{space 3}0.441{col 74}{space 4}-.1412005{col 87}{space 3} .0614733
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0151854{col 46}{space 2} .0226876{col 57}{space 1}   -0.67{col 66}{space 3}0.503{col 74}{space 4}-.0596672{col 87}{space 3} .0292965
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0235807{col 46}{space 2} .0191963{col 57}{space 1}    1.23{col 66}{space 3}0.219{col 74}{space 4} -.014056{col 87}{space 3} .0612174
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2}  .000789{col 46}{space 2} .0003377{col 57}{space 1}    2.34{col 66}{space 3}0.020{col 74}{space 4}  .000127{col 87}{space 3}  .001451
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0377008{col 46}{space 2} .0096309{col 57}{space 1}    3.91{col 66}{space 3}0.000{col 74}{space 4} .0188182{col 87}{space 3} .0565835
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0204706{col 46}{space 2} .0194747{col 57}{space 1}   -1.05{col 66}{space 3}0.293{col 74}{space 4} -.058653{col 87}{space 3} .0177119
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0125523{col 46}{space 2} .0292619{col 57}{space 1}   -0.43{col 66}{space 3}0.668{col 74}{space 4}-.0699238{col 87}{space 3} .0448193
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2} .0011333{col 46}{space 2} .0233328{col 57}{space 1}    0.05{col 66}{space 3}0.961{col 74}{space 4}-.0446134{col 87}{space 3}   .04688
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0261342{col 46}{space 2} .0300779{col 57}{space 1}   -0.87{col 66}{space 3}0.385{col 74}{space 4}-.0851055{col 87}{space 3} .0328372
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0117937{col 46}{space 2} .0245674{col 57}{space 1}   -0.48{col 66}{space 3}0.631{col 74}{space 4} -.059961{col 87}{space 3} .0363737
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0198727{col 46}{space 2}  .024816{col 57}{space 1}   -0.80{col 66}{space 3}0.423{col 74}{space 4}-.0685274{col 87}{space 3}  .028782
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0123811{col 46}{space 2} .0263716{col 57}{space 1}   -0.47{col 66}{space 3}0.639{col 74}{space 4}-.0640858{col 87}{space 3} .0393236
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0081859{col 46}{space 2} .0266387{col 57}{space 1}    0.31{col 66}{space 3}0.759{col 74}{space 4}-.0440425{col 87}{space 3} .0604143
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}-.0045422{col 46}{space 2} .0517956{col 57}{space 1}   -0.09{col 66}{space 3}0.930{col 74}{space 4}-.1060938{col 87}{space 3} .0970093
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2} .0150704{col 46}{space 2} .0298446{col 57}{space 1}    0.50{col 66}{space 3}0.614{col 74}{space 4}-.0434436{col 87}{space 3} .0735844
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2}-.0209882{col 46}{space 2}  .033494{col 57}{space 1}   -0.63{col 66}{space 3}0.531{col 74}{space 4}-.0866573{col 87}{space 3} .0446809
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0687984{col 46}{space 2} .0438606{col 57}{space 1}    1.57{col 66}{space 3}0.117{col 74}{space 4}-.0171956{col 87}{space 3} .1547925
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.0363359{col 46}{space 2} .0459916{col 57}{space 1}   -0.79{col 66}{space 3}0.430{col 74}{space 4}-.1265079{col 87}{space 3} .0538361
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0105191{col 46}{space 2} .0217505{col 57}{space 1}   -0.48{col 66}{space 3}0.629{col 74}{space 4}-.0531636{col 87}{space 3} .0321254
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0951372{col 46}{space 2} .0954084{col 57}{space 1}    1.00{col 66}{space 3}0.319{col 74}{space 4}-.0919226{col 87}{space 3} .2821969
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2} .1092781{col 46}{space 2} .1063344{col 57}{space 1}    1.03{col 66}{space 3}0.304{col 74}{space 4}-.0992033{col 87}{space 3} .3177595
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2}-.0016803{col 46}{space 2} .0426039{col 57}{space 1}   -0.04{col 66}{space 3}0.969{col 74}{space 4}-.0852103{col 87}{space 3} .0818498
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0169703{col 46}{space 2}  .042943{col 57}{space 1}   -0.40{col 66}{space 3}0.693{col 74}{space 4}-.1011653{col 87}{space 3} .0672247
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2}-.0084796{col 46}{space 2} .0447792{col 57}{space 1}   -0.19{col 66}{space 3}0.850{col 74}{space 4}-.0962746{col 87}{space 3} .0793155
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0091199{col 46}{space 2} .0451015{col 57}{space 1}    0.20{col 66}{space 3}0.840{col 74}{space 4}-.0793069{col 87}{space 3} .0975468
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0548295{col 46}{space 2} .0475355{col 57}{space 1}   -1.15{col 66}{space 3}0.249{col 74}{space 4}-.1480285{col 87}{space 3} .0383696
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0357124{col 46}{space 2} .0533977{col 57}{space 1}    0.67{col 66}{space 3}0.504{col 74}{space 4}-.0689803{col 87}{space 3} .1404051
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0256761{col 46}{space 2} .0867639{col 57}{space 1}   -0.30{col 66}{space 3}0.767{col 74}{space 4}-.1957873{col 87}{space 3}  .144435
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2}  .023487{col 46}{space 2} .0145242{col 57}{space 1}    1.62{col 66}{space 3}0.106{col 74}{space 4}-.0049895{col 87}{space 3} .0519636
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0012139{col 46}{space 2} .0180095{col 57}{space 1}    0.07{col 66}{space 3}0.946{col 74}{space 4}-.0340959{col 87}{space 3} .0365238
+{txt}{space 30}3  {c |}{col 34}{res}{space 2}-.0034118{col 46}{space 2} .0170661{col 57}{space 1}   -0.20{col 66}{space 3}0.842{col 74}{space 4}-.0368718{col 87}{space 3} .0300483
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0025553{col 46}{space 2} .0188403{col 57}{space 1}   -0.14{col 66}{space 3}0.892{col 74}{space 4} -.039494{col 87}{space 3} .0343833
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0127737{col 46}{space 2} .0211721{col 57}{space 1}   -0.60{col 66}{space 3}0.546{col 74}{space 4}-.0542842{col 87}{space 3} .0287368
+{txt}{space 30}6  {c |}{col 34}{res}{space 2}-.0079032{col 46}{space 2}  .020611{col 57}{space 1}   -0.38{col 66}{space 3}0.701{col 74}{space 4}-.0483136{col 87}{space 3} .0325072
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0169452{col 46}{space 2} .0175029{col 57}{space 1}    0.97{col 66}{space 3}0.333{col 74}{space 4}-.0173713{col 87}{space 3} .0512618
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0120823{col 46}{space 2} .0176324{col 57}{space 1}    0.69{col 66}{space 3}0.493{col 74}{space 4}-.0224881{col 87}{space 3} .0466528
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0264282{col 46}{space 2} .0167312{col 57}{space 1}    1.58{col 66}{space 3}0.114{col 74}{space 4}-.0063754{col 87}{space 3} .0592318
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0318375{col 46}{space 2} .0176888{col 57}{space 1}    1.80{col 66}{space 3}0.072{col 74}{space 4}-.0028435{col 87}{space 3} .0665184
+{txt}{space 29}11  {c |}{col 34}{res}{space 2}-.0068149{col 46}{space 2} .0177043{col 57}{space 1}   -0.38{col 66}{space 3}0.700{col 74}{space 4}-.0415263{col 87}{space 3} .0278965
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0027155{col 46}{space 2} .0190785{col 57}{space 1}    0.14{col 66}{space 3}0.887{col 74}{space 4}-.0346902{col 87}{space 3} .0401212
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.27719{col 46}{space 2} .1292207{col 57}{space 1}   95.01{col 66}{space 3}0.000{col 74}{space 4} 12.02384{col 87}{space 3} 12.53054
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     3611{col 28}{space 1}     3611{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      219{col 28}{space 1}        1{col 40}{result}{space 1}      218{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store placebo_2018
+{txt}
+{com}. 
+. * ============================================================================
+. * ROBUSTNESS: Composition Placebo Using Predicted Prices from 2016-2017
+. * ============================================================================
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. regress log_price additional_dwellings ///
+>     i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month if inrange(year, 2016, 2017)
+
+{txt}      Source {c |}       SS           df       MS      Number of obs   ={res}    11,059
+{txt}{hline 13}{c +}{hline 34}   F(48, 11010)    = {res}    27.12
+{txt}       Model {c |} {res} 302.796432        48    6.308259   {txt}Prob > F        ={res}    0.0000
+{txt}    Residual {c |} {res} 2561.11961    11,010  .232617585   {txt}R-squared       ={res}    0.1057
+{txt}{hline 13}{c +}{hline 34}   Adj R-squared   ={res}    0.1018
+{txt}       Total {c |} {res} 2863.91604    11,058  .258990418   {txt}Root MSE        =   {res}  .4823
+
+{txt}{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  Std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 12}additional_dwellings {c |}{col 34}{res}{space 2} .0000306{col 46}{space 2} 6.54e-06{col 57}{space 1}    4.67{col 66}{space 3}0.000{col 74}{space 4} .0000177{col 87}{space 3} .0000434
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2}  .232538{col 46}{space 2} .1401625{col 57}{space 1}    1.66{col 66}{space 3}0.097{col 74}{space 4}-.0422057{col 87}{space 3} .5072816
+{txt}{space 26}House  {c |}{col 34}{res}{space 2} .0872322{col 46}{space 2} .1421742{col 57}{space 1}    0.61{col 66}{space 3}0.540{col 74}{space 4}-.1914548{col 87}{space 3} .3659192
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .2420448{col 46}{space 2} .1416155{col 57}{space 1}    1.71{col 66}{space 3}0.087{col 74}{space 4}-.0355469{col 87}{space 3} .5196365
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2}  .155473{col 46}{space 2} .0287805{col 57}{space 1}    5.40{col 66}{space 3}0.000{col 74}{space 4}  .099058{col 87}{space 3}  .211888
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2} .0079351{col 46}{space 2} .0409911{col 57}{space 1}    0.19{col 66}{space 3}0.847{col 74}{space 4}-.0724148{col 87}{space 3} .0882849
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0451978{col 46}{space 2} .0229637{col 57}{space 1}    1.97{col 66}{space 3}0.049{col 74}{space 4} .0001847{col 87}{space 3} .0902108
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2}-.0161805{col 46}{space 2}  .020985{col 57}{space 1}   -0.77{col 66}{space 3}0.441{col 74}{space 4}-.0573148{col 87}{space 3} .0249538
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0492766{col 46}{space 2} .1163032{col 57}{space 1}   -0.42{col 66}{space 3}0.672{col 74}{space 4}-.2772518{col 87}{space 3} .1786986
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0163208{col 46}{space 2} .0223855{col 57}{space 1}   -0.73{col 66}{space 3}0.466{col 74}{space 4}-.0602005{col 87}{space 3} .0275589
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2}-.0145453{col 46}{space 2} .0219756{col 57}{space 1}   -0.66{col 66}{space 3}0.508{col 74}{space 4}-.0576214{col 87}{space 3} .0285308
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0054486{col 46}{space 2}  .000289{col 57}{space 1}   18.86{col 66}{space 3}0.000{col 74}{space 4} .0048822{col 87}{space 3} .0060151
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2}-.0239869{col 46}{space 2} .0081867{col 57}{space 1}   -2.93{col 66}{space 3}0.003{col 74}{space 4}-.0400343{col 87}{space 3}-.0079396
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2} -.046171{col 46}{space 2} .0184072{col 57}{space 1}   -2.51{col 66}{space 3}0.012{col 74}{space 4}-.0822523{col 87}{space 3}-.0100897
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2} -.100324{col 46}{space 2} .0210073{col 57}{space 1}   -4.78{col 66}{space 3}0.000{col 74}{space 4}-.1415022{col 87}{space 3}-.0591459
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.1660405{col 46}{space 2} .0204992{col 57}{space 1}   -8.10{col 66}{space 3}0.000{col 74}{space 4}-.2062226{col 87}{space 3}-.1258584
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0984582{col 46}{space 2} .0261065{col 57}{space 1}   -3.77{col 66}{space 3}0.000{col 74}{space 4}-.1496316{col 87}{space 3}-.0472848
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.2270321{col 46}{space 2} .0232527{col 57}{space 1}   -9.76{col 66}{space 3}0.000{col 74}{space 4}-.2726115{col 87}{space 3}-.1814526
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.2186463{col 46}{space 2} .0269396{col 57}{space 1}   -8.12{col 66}{space 3}0.000{col 74}{space 4}-.2714529{col 87}{space 3}-.1658398
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0887572{col 46}{space 2} .0234298{col 57}{space 1}   -3.79{col 66}{space 3}0.000{col 74}{space 4}-.1346837{col 87}{space 3}-.0428306
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2}-.0990755{col 46}{space 2} .0209171{col 57}{space 1}   -4.74{col 66}{space 3}0.000{col 74}{space 4}-.1400767{col 87}{space 3}-.0580744
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2}-.2316092{col 46}{space 2} .0550713{col 57}{space 1}   -4.21{col 66}{space 3}0.000{col 74}{space 4}-.3395589{col 87}{space 3}-.1236596
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2}-.1697356{col 46}{space 2} .0229577{col 57}{space 1}   -7.39{col 66}{space 3}0.000{col 74}{space 4}-.2147367{col 87}{space 3}-.1247345
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2}-.0412394{col 46}{space 2} .0190834{col 57}{space 1}   -2.16{col 66}{space 3}0.031{col 74}{space 4}-.0786462{col 87}{space 3}-.0038326
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0436724{col 46}{space 2} .0221341{col 57}{space 1}    1.97{col 66}{space 3}0.049{col 74}{space 4} .0002856{col 87}{space 3} .0870593
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2}-.2833692{col 46}{space 2} .2429462{col 57}{space 1}   -1.17{col 66}{space 3}0.243{col 74}{space 4}-.7595874{col 87}{space 3}  .192849
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2} .0362283{col 46}{space 2} .0209334{col 57}{space 1}    1.73{col 66}{space 3}0.084{col 74}{space 4} -.004805{col 87}{space 3} .0772616
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0892316{col 46}{space 2} .0736825{col 57}{space 1}    1.21{col 66}{space 3}0.226{col 74}{space 4}-.0551993{col 87}{space 3} .2336625
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2} .3998338{col 46}{space 2} .3428709{col 57}{space 1}    1.17{col 66}{space 3}0.244{col 74}{space 4}-.2722547{col 87}{space 3} 1.071922
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2} .0431412{col 46}{space 2} .0552935{col 57}{space 1}    0.78{col 66}{space 3}0.435{col 74}{space 4}-.0652439{col 87}{space 3} .1515263
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2} .0524042{col 46}{space 2} .0555583{col 57}{space 1}    0.94{col 66}{space 3}0.346{col 74}{space 4}-.0564999{col 87}{space 3} .1613084
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0461442{col 46}{space 2} .0579404{col 57}{space 1}    0.80{col 66}{space 3}0.426{col 74}{space 4}-.0674294{col 87}{space 3} .1597178
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .1321389{col 46}{space 2} .0583502{col 57}{space 1}    2.26{col 66}{space 3}0.024{col 74}{space 4}  .017762{col 87}{space 3} .2465158
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2} .0581323{col 46}{space 2} .0601569{col 57}{space 1}    0.97{col 66}{space 3}0.334{col 74}{space 4}-.0597859{col 87}{space 3} .1760506
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2}-.0356552{col 46}{space 2} .0786432{col 57}{space 1}   -0.45{col 66}{space 3}0.650{col 74}{space 4}  -.18981{col 87}{space 3} .1184996
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0146932{col 46}{space 2} .1170382{col 57}{space 1}   -0.13{col 66}{space 3}0.900{col 74}{space 4}-.2441091{col 87}{space 3} .2147226
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0212308{col 46}{space 2}  .012668{col 57}{space 1}    1.68{col 66}{space 3}0.094{col 74}{space 4}-.0036008{col 87}{space 3} .0460624
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0008493{col 46}{space 2} .0234399{col 57}{space 1}    0.04{col 66}{space 3}0.971{col 74}{space 4}-.0450971{col 87}{space 3} .0467957
+{txt}{space 30}3  {c |}{col 34}{res}{space 2}-.0458301{col 46}{space 2} .0210292{col 57}{space 1}   -2.18{col 66}{space 3}0.029{col 74}{space 4}-.0870512{col 87}{space 3}-.0046091
+{txt}{space 30}4  {c |}{col 34}{res}{space 2} .0067505{col 46}{space 2} .0246964{col 57}{space 1}    0.27{col 66}{space 3}0.785{col 74}{space 4}-.0416589{col 87}{space 3} .0551599
+{txt}{space 30}5  {c |}{col 34}{res}{space 2} .0331731{col 46}{space 2} .0235732{col 57}{space 1}    1.41{col 66}{space 3}0.159{col 74}{space 4}-.0130346{col 87}{space 3} .0793807
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0669358{col 46}{space 2} .0224667{col 57}{space 1}    2.98{col 66}{space 3}0.003{col 74}{space 4} .0228971{col 87}{space 3} .1109745
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0326122{col 46}{space 2} .0236308{col 57}{space 1}    1.38{col 66}{space 3}0.168{col 74}{space 4}-.0137084{col 87}{space 3} .0789327
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} -.009491{col 46}{space 2} .0231471{col 57}{space 1}   -0.41{col 66}{space 3}0.682{col 74}{space 4}-.0548634{col 87}{space 3} .0358815
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0054659{col 46}{space 2}  .023321{col 57}{space 1}    0.23{col 66}{space 3}0.815{col 74}{space 4}-.0402474{col 87}{space 3} .0511793
+{txt}{space 29}10  {c |}{col 34}{res}{space 2}-.0206614{col 46}{space 2} .0232154{col 57}{space 1}   -0.89{col 66}{space 3}0.373{col 74}{space 4}-.0661678{col 87}{space 3}  .024845
+{txt}{space 29}11  {c |}{col 34}{res}{space 2}-.0296441{col 46}{space 2} .0231545{col 57}{space 1}   -1.28{col 66}{space 3}0.200{col 74}{space 4} -.075031{col 87}{space 3} .0157429
+{txt}{space 29}12  {c |}{col 34}{res}{space 2}-.0553412{col 46}{space 2} .0228139{col 57}{space 1}   -2.43{col 66}{space 3}0.015{col 74}{space 4}-.1000605{col 87}{space 3}-.0106218
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2}  12.1381{col 46}{space 2} .1536807{col 57}{space 1}   78.98{col 66}{space 3}0.000{col 74}{space 4} 11.83685{col 87}{space 3} 12.43934
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}{txt}
+{com}. 
+. * Predicted prices strip out the treatment effect by construction and retain only composition on observables.
+. predict pred_log_price, xb
+{txt}(10,538 missing values generated)
+
+{com}. 
+. reghdfe pred_log_price treated_post i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 60 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 16 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    42,865
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  12{txt},{res}   4757{txt}){col 67}= {res}    422.59
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.7104
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.6704
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.1064
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     4,758{txt}{col 51}Root MSE{col 67}= {res}    0.0988
+
+{txt}{ralign 78:(Std. err. adjusted for {res:4,758} clusters in {res:postcode_id})}
+{hline 13}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 14}{c |}{col 26}    Robust
+{col 1}pred_log_p~e{col 14}{c |} Coefficient{col 26}  std. err.{col 38}      t{col 46}   P>|t|{col 54}     [95% con{col 67}f. interval]
+{hline 13}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+treated_post {c |}{col 14}{res}{space 2}-.0022929{col 26}{space 2} .0024667{col 37}{space 1}   -0.93{col 46}{space 3}0.353{col 54}{space 4}-.0071287{col 67}{space 3}  .002543
+{txt}{space 12} {c |}
+{space 7}month {c |}
+{space 10}2  {c |}{col 14}{res}{space 2}-.0030627{col 26}{space 2} .0025809{col 37}{space 1}   -1.19{col 46}{space 3}0.235{col 54}{space 4}-.0081224{col 67}{space 3} .0019971
+{txt}{space 10}3  {c |}{col 14}{res}{space 2}-.0495054{col 26}{space 2} .0026819{col 37}{space 1}  -18.46{col 46}{space 3}0.000{col 54}{space 4}-.0547632{col 67}{space 3}-.0442476
+{txt}{space 10}4  {c |}{col 14}{res}{space 2} .0011951{col 26}{space 2} .0026702{col 37}{space 1}    0.45{col 46}{space 3}0.654{col 54}{space 4}-.0040397{col 67}{space 3} .0064298
+{txt}{space 10}5  {c |}{col 14}{res}{space 2} .0326281{col 26}{space 2} .0028585{col 37}{space 1}   11.41{col 46}{space 3}0.000{col 54}{space 4} .0270241{col 67}{space 3} .0382321
+{txt}{space 10}6  {c |}{col 14}{res}{space 2} .0608966{col 26}{space 2}  .002463{col 37}{space 1}   24.72{col 46}{space 3}0.000{col 54}{space 4} .0560679{col 67}{space 3} .0657252
+{txt}{space 10}7  {c |}{col 14}{res}{space 2} .0320219{col 26}{space 2} .0026828{col 37}{space 1}   11.94{col 46}{space 3}0.000{col 54}{space 4} .0267623{col 67}{space 3} .0372814
+{txt}{space 10}8  {c |}{col 14}{res}{space 2}-.0141683{col 26}{space 2} .0025237{col 37}{space 1}   -5.61{col 46}{space 3}0.000{col 54}{space 4} -.019116{col 67}{space 3}-.0092206
+{txt}{space 10}9  {c |}{col 14}{res}{space 2}-.0003141{col 26}{space 2} .0026631{col 37}{space 1}   -0.12{col 46}{space 3}0.906{col 54}{space 4}-.0055349{col 67}{space 3} .0049068
+{txt}{space 9}10  {c |}{col 14}{res}{space 2}-.0259569{col 26}{space 2} .0024118{col 37}{space 1}  -10.76{col 46}{space 3}0.000{col 54}{space 4}-.0306852{col 67}{space 3}-.0212286
+{txt}{space 9}11  {c |}{col 14}{res}{space 2}-.0344192{col 26}{space 2}  .002583{col 37}{space 1}  -13.33{col 46}{space 3}0.000{col 54}{space 4}-.0394831{col 67}{space 3}-.0293553
+{txt}{space 9}12  {c |}{col 14}{res}{space 2}-.0597593{col 26}{space 2} .0024341{col 37}{space 1}  -24.55{col 46}{space 3}0.000{col 54}{space 4}-.0645313{col 67}{space 3}-.0549874
+{txt}{space 12} {c |}
+{space 7}_cons {c |}{col 14}{res}{space 2} 12.67468{col 26}{space 2} .0018922{col 37}{space 1} 6698.33{col 46}{space 3}0.000{col 54}{space 4} 12.67097{col 67}{space 3} 12.67839
+{txt}{hline 13}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     4758{col 28}{space 1}     4758{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      439{col 28}{space 1}        1{col 40}{result}{space 1}      438{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store composition_placebo
+{txt}
+{com}. 
+. * ============================================================================
+. * MECHANISM: Transaction Volume
+. * ============================================================================
+. * Table 6, column (3)
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_transactions treated_post i.month, ///
+>     absorb(station_treated year) vce(cluster station_id)
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 4 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    10,234
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  12{txt},{res}     44{txt}){col 67}= {res}     89.66
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.7597
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.7571
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0657
+{txt}{col 1}Number of clusters ({res}station_id{txt}) {col 30}= {res}        45{txt}{col 51}Root MSE{col 67}= {res}    0.4612
+
+{txt}{ralign 78:(Std. err. adjusted for {res:45} clusters in {res:station_id})}
+{hline 13}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 14}{c |}{col 26}    Robust
+{col 1}log_transa~s{col 14}{c |} Coefficient{col 26}  std. err.{col 38}      t{col 46}   P>|t|{col 54}     [95% con{col 67}f. interval]
+{hline 13}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+treated_post {c |}{col 14}{res}{space 2}-.0325596{col 26}{space 2} .0245409{col 37}{space 1}   -1.33{col 46}{space 3}0.191{col 54}{space 4}-.0820185{col 67}{space 3} .0168994
+{txt}{space 12} {c |}
+{space 7}month {c |}
+{space 10}2  {c |}{col 14}{res}{space 2} .0312061{col 26}{space 2} .0150423{col 37}{space 1}    2.07{col 46}{space 3}0.044{col 54}{space 4} .0008903{col 67}{space 3} .0615219
+{txt}{space 10}3  {c |}{col 14}{res}{space 2} .3188494{col 26}{space 2}  .017555{col 37}{space 1}   18.16{col 46}{space 3}0.000{col 54}{space 4} .2834696{col 67}{space 3} .3542291
+{txt}{space 10}4  {c |}{col 14}{res}{space 2}-.1745473{col 26}{space 2} .0252658{col 37}{space 1}   -6.91{col 46}{space 3}0.000{col 54}{space 4}-.2254671{col 67}{space 3}-.1236274
+{txt}{space 10}5  {c |}{col 14}{res}{space 2}-.0795768{col 26}{space 2} .0172592{col 37}{space 1}   -4.61{col 46}{space 3}0.000{col 54}{space 4}-.1143604{col 67}{space 3}-.0447932
+{txt}{space 10}6  {c |}{col 14}{res}{space 2} .1700528{col 26}{space 2} .0240469{col 37}{space 1}    7.07{col 46}{space 3}0.000{col 54}{space 4} .1215894{col 67}{space 3} .2185162
+{txt}{space 10}7  {c |}{col 14}{res}{space 2} .0688355{col 26}{space 2} .0201071{col 37}{space 1}    3.42{col 46}{space 3}0.001{col 54}{space 4} .0283122{col 67}{space 3} .1093587
+{txt}{space 10}8  {c |}{col 14}{res}{space 2} .1533905{col 26}{space 2} .0190381{col 37}{space 1}    8.06{col 46}{space 3}0.000{col 54}{space 4} .1150218{col 67}{space 3} .1917592
+{txt}{space 10}9  {c |}{col 14}{res}{space 2} .1596705{col 26}{space 2} .0164925{col 37}{space 1}    9.68{col 46}{space 3}0.000{col 54}{space 4} .1264321{col 67}{space 3} .1929089
+{txt}{space 9}10  {c |}{col 14}{res}{space 2} .0879811{col 26}{space 2} .0209679{col 37}{space 1}    4.20{col 46}{space 3}0.000{col 54}{space 4} .0457231{col 67}{space 3}  .130239
+{txt}{space 9}11  {c |}{col 14}{res}{space 2} .0929161{col 26}{space 2}  .017652{col 37}{space 1}    5.26{col 46}{space 3}0.000{col 54}{space 4} .0573408{col 67}{space 3} .1284913
+{txt}{space 9}12  {c |}{col 14}{res}{space 2} .0937863{col 26}{space 2} .0226459{col 37}{space 1}    4.14{col 46}{space 3}0.000{col 54}{space 4} .0481464{col 67}{space 3} .1394261
+{txt}{space 12} {c |}
+{space 7}_cons {c |}{col 14}{res}{space 2} 2.569928{col 26}{space 2} .0141187{col 37}{space 1}  182.02{col 46}{space 3}0.000{col 54}{space 4} 2.541474{col 67}{space 3} 2.598383
+{txt}{hline 13}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 17}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}     Absorbed FE{col 18}{c |} Categories{col 31} - Redundant{col 43}  = Num. Coefs{col 58}{c |}
+{res}{col 1}{text}{hline 17}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text} station_treated{col 18}{c |}{space 1}       88{col 31}{space 1}       88{col 43}{result}{space 1}        0{col 57}{text}*{col 58}{c |}
+{res}{col 1}{text}            year{col 18}{c |}{space 1}       10{col 31}{space 1}        1{col 43}{result}{space 1}        9{col 57}{text} {col 58}{c |}
+{res}{col 1}{text}{hline 17}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store tx_volume
+{txt}
+{com}. 
+. * ============================================================================
+. * MECHANISM: Fare Zone Heterogeneity (Treatment vs Ring)
+. * ============================================================================
+. * Table 6, column (1)(2)
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+. reghdfe log_price treated_post_inner treated_post_outer ///
+>     additional_dwellings i.property_type_enc i.built_form_enc TOTAL_FLOOR_AREA ///
+>     NUMBER_HABITABLE_ROOMS i.construction_age_enc i.tenure_enc ///
+>     EXTENSION_COUNT i.month, ///
+>     absorb(postcode_id station_year) vce(cluster postcode_id)
+{res}{txt}(dropped 60 {browse "http://scorreia.com/research/singletons.pdf":singleton observations})
+{res}{txt}({browse "http://scorreia.com/research/hdfe.pdf":MWFE estimator} converged in 16 iterations)
+{res}
+{txt}HDFE Linear regression{col 51}Number of obs{col 67}= {res}    42,865
+{txt}Absorbing 2 HDFE groups{col 51}F({res}  50{txt},{res}   4757{txt}){col 67}= {res}      5.25
+{txt}Statistics robust to heteroskedasticity{col 51}Prob > F{col 67}= {res}    0.0000
+{txt}{col 51}R-squared{col 67}= {res}    0.5144
+{txt}{col 51}Adj R-squared{col 67}= {res}    0.4466
+{txt}{col 51}Within R-sq.{col 67}= {res}    0.0135
+{txt}{col 1}Number of clusters ({res}postcode_id{txt}) {col 30}= {res}     4,758{txt}{col 51}Root MSE{col 67}= {res}    0.3786
+
+{txt}{ralign 98:(Std. err. adjusted for {res:4,758} clusters in {res:postcode_id})}
+{hline 33}{c TT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{col 34}{c |}{col 46}    Robust
+{col 1}                       log_price{col 34}{c |} Coefficient{col 46}  std. err.{col 58}      t{col 66}   P>|t|{col 74}     [95% con{col 87}f. interval]
+{hline 33}{c +}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{space 14}treated_post_inner {c |}{col 34}{res}{space 2} .0199165{col 46}{space 2} .0135608{col 57}{space 1}    1.47{col 66}{space 3}0.142{col 74}{space 4}-.0066689{col 87}{space 3} .0465019
+{txt}{space 14}treated_post_outer {c |}{col 34}{res}{space 2} .0379961{col 46}{space 2} .0148082{col 57}{space 1}    2.57{col 66}{space 3}0.010{col 74}{space 4} .0089651{col 87}{space 3} .0670271
+{txt}{space 12}additional_dwellings {c |}{col 34}{res}{space 2} 2.54e-06{col 46}{space 2} 7.91e-06{col 57}{space 1}    0.32{col 66}{space 3}0.748{col 74}{space 4} -.000013{col 87}{space 3} .0000181
+{txt}{space 32} {c |}
+{space 15}property_type_enc {c |}
+{space 27}Flat  {c |}{col 34}{res}{space 2} .1179641{col 46}{space 2} .1020952{col 57}{space 1}    1.16{col 66}{space 3}0.248{col 74}{space 4}-.0821898{col 87}{space 3} .3181179
+{txt}{space 26}House  {c |}{col 34}{res}{space 2}-.1006434{col 46}{space 2} .1086674{col 57}{space 1}   -0.93{col 66}{space 3}0.354{col 74}{space 4}-.3136818{col 87}{space 3}  .112395
+{txt}{space 21}Maisonette  {c |}{col 34}{res}{space 2} .0770803{col 46}{space 2} .1035885{col 57}{space 1}    0.74{col 66}{space 3}0.457{col 74}{space 4}-.1260011{col 87}{space 3} .2801618
+{txt}{space 32} {c |}
+{space 18}built_form_enc {c |}
+{space 11}Enclosed End-Terrace  {c |}{col 34}{res}{space 2} .0107146{col 46}{space 2} .0162808{col 57}{space 1}    0.66{col 66}{space 3}0.510{col 74}{space 4}-.0212033{col 87}{space 3} .0426325
+{txt}{space 11}Enclosed Mid-Terrace  {c |}{col 34}{res}{space 2}-.0334013{col 46}{space 2} .0216683{col 57}{space 1}   -1.54{col 66}{space 3}0.123{col 74}{space 4}-.0758813{col 87}{space 3} .0090787
+{txt}{space 20}End-Terrace  {c |}{col 34}{res}{space 2} .0134908{col 46}{space 2} .0144932{col 57}{space 1}    0.93{col 66}{space 3}0.352{col 74}{space 4}-.0149225{col 87}{space 3} .0419042
+{txt}{space 20}Mid-Terrace  {c |}{col 34}{res}{space 2} .0050341{col 46}{space 2} .0148588{col 57}{space 1}    0.34{col 66}{space 3}0.735{col 74}{space 4} -.024096{col 87}{space 3} .0341643
+{txt}{space 23}NO DATA!  {c |}{col 34}{res}{space 2}-.0229483{col 46}{space 2} .0401089{col 57}{space 1}   -0.57{col 66}{space 3}0.567{col 74}{space 4}-.1015803{col 87}{space 3} .0556838
+{txt}{space 19}Not Recorded  {c |}{col 34}{res}{space 2}-.0187282{col 46}{space 2} .0157118{col 57}{space 1}   -1.19{col 66}{space 3}0.233{col 74}{space 4}-.0495306{col 87}{space 3} .0120741
+{txt}{space 18}Semi-Detached  {c |}{col 34}{res}{space 2} .0098933{col 46}{space 2} .0134304{col 57}{space 1}    0.74{col 66}{space 3}0.461{col 74}{space 4}-.0164364{col 87}{space 3} .0362231
+{txt}{space 32} {c |}
+{space 16}TOTAL_FLOOR_AREA {c |}{col 34}{res}{space 2} .0011689{col 46}{space 2} .0003356{col 57}{space 1}    3.48{col 66}{space 3}0.000{col 74}{space 4}  .000511{col 87}{space 3} .0018267
+{txt}{space 10}NUMBER_HABITABLE_ROOMS {c |}{col 34}{res}{space 2} .0391379{col 46}{space 2} .0064882{col 57}{space 1}    6.03{col 66}{space 3}0.000{col 74}{space 4} .0264181{col 87}{space 3} .0518578
+{txt}{space 32} {c |}
+{space 12}construction_age_enc {c |}
+{space 3}England and Wales: 1930-1949  {c |}{col 34}{res}{space 2}-.0080834{col 46}{space 2} .0129097{col 57}{space 1}   -0.63{col 66}{space 3}0.531{col 74}{space 4}-.0333924{col 87}{space 3} .0172255
+{txt}{space 3}England and Wales: 1950-1966  {c |}{col 34}{res}{space 2}-.0293164{col 46}{space 2} .0187311{col 57}{space 1}   -1.57{col 66}{space 3}0.118{col 74}{space 4}-.0660381{col 87}{space 3} .0074053
+{txt}{space 3}England and Wales: 1967-1975  {c |}{col 34}{res}{space 2}-.0106783{col 46}{space 2} .0149814{col 57}{space 1}   -0.71{col 66}{space 3}0.476{col 74}{space 4}-.0400487{col 87}{space 3} .0186921
+{txt}{space 3}England and Wales: 1976-1982  {c |}{col 34}{res}{space 2}-.0309103{col 46}{space 2} .0187352{col 57}{space 1}   -1.65{col 66}{space 3}0.099{col 74}{space 4}  -.06764{col 87}{space 3} .0058194
+{txt}{space 3}England and Wales: 1983-1990  {c |}{col 34}{res}{space 2}-.0141044{col 46}{space 2} .0157394{col 57}{space 1}   -0.90{col 66}{space 3}0.370{col 74}{space 4} -.044961{col 87}{space 3} .0167521
+{txt}{space 3}England and Wales: 1991-1995  {c |}{col 34}{res}{space 2}-.0073737{col 46}{space 2} .0172668{col 57}{space 1}   -0.43{col 66}{space 3}0.669{col 74}{space 4}-.0412246{col 87}{space 3} .0264772
+{txt}{space 3}England and Wales: 1996-2002  {c |}{col 34}{res}{space 2}-.0027691{col 46}{space 2} .0170387{col 57}{space 1}   -0.16{col 66}{space 3}0.871{col 74}{space 4}-.0361728{col 87}{space 3} .0306346
+{txt}{space 3}England and Wales: 2003-2006  {c |}{col 34}{res}{space 2} .0114756{col 46}{space 2} .0177046{col 57}{space 1}    0.65{col 66}{space 3}0.517{col 74}{space 4}-.0232336{col 87}{space 3} .0461848
+{txt}England and Wales: 2007 onwards  {c |}{col 34}{res}{space 2} .0086544{col 46}{space 2}  .038374{col 57}{space 1}    0.23{col 66}{space 3}0.822{col 74}{space 4}-.0665763{col 87}{space 3} .0838852
+{txt}{space 3}England and Wales: 2007-2011  {c |}{col 34}{res}{space 2}  .000841{col 46}{space 2}  .018669{col 57}{space 1}    0.05{col 66}{space 3}0.964{col 74}{space 4}-.0357589{col 87}{space 3} .0374409
+{txt}England and Wales: 2012 onwards  {c |}{col 34}{res}{space 2} .0230222{col 46}{space 2} .0229691{col 57}{space 1}    1.00{col 66}{space 3}0.316{col 74}{space 4}-.0220079{col 87}{space 3} .0680523
+{txt}{space 3}England and Wales: 2012-2021  {c |}{col 34}{res}{space 2} .0908102{col 46}{space 2} .0310949{col 57}{space 1}    2.92{col 66}{space 3}0.004{col 74}{space 4} .0298499{col 87}{space 3} .1517706
+{txt}England and Wales: 2022 onwards  {c |}{col 34}{res}{space 2} -.059142{col 46}{space 2} .0318606{col 57}{space 1}   -1.86{col 66}{space 3}0.063{col 74}{space 4}-.1216034{col 87}{space 3} .0033195
+{txt}{space 1}England and Wales: before 1900  {c |}{col 34}{res}{space 2}-.0016745{col 46}{space 2} .0136297{col 57}{space 1}   -0.12{col 66}{space 3}0.902{col 74}{space 4} -.028395{col 87}{space 3}  .025046
+{txt}{space 23}INVALID!  {c |}{col 34}{res}{space 2} .0793068{col 46}{space 2}  .064463{col 57}{space 1}    1.23{col 66}{space 3}0.219{col 74}{space 4}-.0470706{col 87}{space 3} .2056842
+{txt}{space 28}nan  {c |}{col 34}{res}{space 2}-.0376648{col 46}{space 2} .0896666{col 57}{space 1}   -0.42{col 66}{space 3}0.674{col 74}{space 4}-.2134528{col 87}{space 3} .1381233
+{txt}{space 32} {c |}
+{space 22}tenure_enc {c |}
+{space 17}Owner-occupied  {c |}{col 34}{res}{space 2}-.0028118{col 46}{space 2} .0293632{col 57}{space 1}   -0.10{col 66}{space 3}0.924{col 74}{space 4}-.0603773{col 87}{space 3} .0547536
+{txt}{space 15}Rented (private)  {c |}{col 34}{res}{space 2}-.0221992{col 46}{space 2}  .029668{col 57}{space 1}   -0.75{col 66}{space 3}0.454{col 74}{space 4}-.0803622{col 87}{space 3} .0359638
+{txt}{space 16}Rented (social)  {c |}{col 34}{res}{space 2} .0003187{col 46}{space 2} .0306235{col 57}{space 1}    0.01{col 66}{space 3}0.992{col 74}{space 4}-.0597176{col 87}{space 3}  .060355
+{txt}{space 17}owner-occupied  {c |}{col 34}{res}{space 2} .0004428{col 46}{space 2} .0312695{col 57}{space 1}    0.01{col 66}{space 3}0.989{col 74}{space 4}-.0608599{col 87}{space 3} .0617455
+{txt}{space 15}rental (private)  {c |}{col 34}{res}{space 2}-.0376571{col 46}{space 2} .0332328{col 57}{space 1}   -1.13{col 66}{space 3}0.257{col 74}{space 4}-.1028088{col 87}{space 3} .0274945
+{txt}{space 16}rental (social)  {c |}{col 34}{res}{space 2} .0405264{col 46}{space 2} .0485555{col 57}{space 1}    0.83{col 66}{space 3}0.404{col 74}{space 4}-.0546648{col 87}{space 3} .1357176
+{txt}{space 24}unknown  {c |}{col 34}{res}{space 2}-.0416309{col 46}{space 2} .0548904{col 57}{space 1}   -0.76{col 66}{space 3}0.448{col 74}{space 4}-.1492414{col 87}{space 3} .0659796
+{txt}{space 32} {c |}
+{space 17}EXTENSION_COUNT {c |}{col 34}{res}{space 2} .0263834{col 46}{space 2} .0080349{col 57}{space 1}    3.28{col 66}{space 3}0.001{col 74}{space 4} .0106313{col 87}{space 3} .0421354
+{txt}{space 32} {c |}
+{space 27}month {c |}
+{space 30}2  {c |}{col 34}{res}{space 2} .0144614{col 46}{space 2} .0110878{col 57}{space 1}    1.30{col 66}{space 3}0.192{col 74}{space 4}-.0072759{col 87}{space 3} .0361986
+{txt}{space 30}3  {c |}{col 34}{res}{space 2} .0055624{col 46}{space 2} .0102024{col 57}{space 1}    0.55{col 66}{space 3}0.586{col 74}{space 4} -.014439{col 87}{space 3} .0255638
+{txt}{space 30}4  {c |}{col 34}{res}{space 2}-.0022078{col 46}{space 2} .0122837{col 57}{space 1}   -0.18{col 66}{space 3}0.857{col 74}{space 4}-.0262896{col 87}{space 3} .0218739
+{txt}{space 30}5  {c |}{col 34}{res}{space 2}-.0048693{col 46}{space 2} .0119554{col 57}{space 1}   -0.41{col 66}{space 3}0.684{col 74}{space 4}-.0283074{col 87}{space 3} .0185689
+{txt}{space 30}6  {c |}{col 34}{res}{space 2} .0169318{col 46}{space 2} .0115938{col 57}{space 1}    1.46{col 66}{space 3}0.144{col 74}{space 4}-.0057974{col 87}{space 3}  .039661
+{txt}{space 30}7  {c |}{col 34}{res}{space 2} .0144909{col 46}{space 2} .0110151{col 57}{space 1}    1.32{col 66}{space 3}0.188{col 74}{space 4}-.0071038{col 87}{space 3} .0360855
+{txt}{space 30}8  {c |}{col 34}{res}{space 2} .0198758{col 46}{space 2} .0104568{col 57}{space 1}    1.90{col 66}{space 3}0.057{col 74}{space 4}-.0006242{col 87}{space 3} .0403759
+{txt}{space 30}9  {c |}{col 34}{res}{space 2} .0262692{col 46}{space 2} .0102339{col 57}{space 1}    2.57{col 66}{space 3}0.010{col 74}{space 4}  .006206{col 87}{space 3} .0463324
+{txt}{space 29}10  {c |}{col 34}{res}{space 2} .0130454{col 46}{space 2} .0104078{col 57}{space 1}    1.25{col 66}{space 3}0.210{col 74}{space 4}-.0073587{col 87}{space 3} .0334495
+{txt}{space 29}11  {c |}{col 34}{res}{space 2} .0060333{col 46}{space 2} .0110218{col 57}{space 1}    0.55{col 66}{space 3}0.584{col 74}{space 4}-.0155745{col 87}{space 3}  .027641
+{txt}{space 29}12  {c |}{col 34}{res}{space 2} .0079543{col 46}{space 2} .0126418{col 57}{space 1}    0.63{col 66}{space 3}0.529{col 74}{space 4}-.0168295{col 87}{space 3} .0327381
+{txt}{space 32} {c |}
+{space 27}_cons {c |}{col 34}{res}{space 2} 12.37983{col 46}{space 2} .1088902{col 57}{space 1}  113.69{col 66}{space 3}0.000{col 74}{space 4} 12.16635{col 87}{space 3} 12.59331
+{txt}{hline 33}{c BT}{hline 11}{hline 11}{hline 9}{hline 8}{hline 13}{hline 12}
+{res}
+{txt}Absorbed degrees of freedom:
+{res}{col 1}{text}{hline 14}{c TT}{hline 12}{hline 12}{hline 14}{hline 1}{c TRC}
+{col 1}{text}  Absorbed FE{col 15}{c |} Categories{col 28} - Redundant{col 40}  = Num. Coefs{col 55}{c |}
+{res}{col 1}{text}{hline 14}{c +}{hline 12}{hline 12}{hline 14}{hline 1}{c RT}
+{col 1}{text}  postcode_id{col 15}{c |}{space 1}     4758{col 28}{space 1}     4758{col 40}{result}{space 1}        0{col 54}{text}*{col 55}{c |}
+{res}{col 1}{text} station_year{col 15}{c |}{space 1}      439{col 28}{space 1}        1{col 40}{result}{space 1}      438{col 54}{text} {col 55}{c |}
+{res}{col 1}{text}{hline 14}{c BT}{hline 12}{hline 12}{hline 14}{hline 1}{c BRC}
+* = FE nested within cluster; treated as redundant for DoF computation
+{res}{txt}
+{com}. estimates store fare_zone
+{txt}
+{com}. 
+. * ============================================================================
+. * SUMMARY TABLE
+. * ============================================================================
+. foreach row in ///
+>     "baseline_ring|Baseline ring (<1km vs 1.5-3km)|treated_post" ///
+>     "control_swr|Operator control (SWR; station FE + year FE)|treated_post" ///
+>     "control_southeastern|Operator control (Southeastern; station FE + year FE)|treated_post" ///
+>     "ring_500|Ring radius (<500m vs 1.5-3km)|treated_post" ///
+>     "ring_1500|Ring radius (<1.5km vs 1.5-3km)|treated_post" ///
+>     "oa_fe|OA FE|treated_post" ///
+>     "station_ring_fe|Station x ring FE (500m bins; pre/post supported cells)|treated_post" ///
+>     "post_covid|Post-2023 sample|treated_post" ///
+>     "placebo_2018|Placebo treatment date (Jan 2018-Dec 2020)|treated_post" ///
+>     "composition_placebo|Composition placebo (predicted price)|treated_post" ///
+>     "fare_zone|Fare zone heterogeneity (inner)|treated_post_inner" ///
+>     "fare_zone|Fare zone heterogeneity (outer)|treated_post_outer" ///
+>     "tx_volume|Transaction volume (log transactions)|treated_post" {c -(}
+{txt}  2{com}.     gettoken m rest : row, parse("|")
+{txt}  3{com}.     gettoken bar rest : rest, parse("|")
+{txt}  4{com}.     gettoken label rest : rest, parse("|")
+{txt}  5{com}.     gettoken bar coefvar : rest, parse("|")
+{txt}  6{com}.     estimates restore `m'
+{txt}  7{com}.     local b  = _b[`coefvar']
+{txt}  8{com}.     local se = _se[`coefvar']
+{txt}  9{com}.     local n  = e(N)
+{txt} 10{com}.     display %60s "`label'" %12.4f `b' %12.4f `se' %8.0f `n'
+{txt} 11{com}. {c )-}
+{txt}(results {stata estimates replay baseline_ring:baseline_ring} are active now)
+                             Baseline ring (<1km vs 1.5-3km)      0.0281      0.0100   42865
+(results {stata estimates replay control_swr:control_swr} are active now)
+                Operator control (SWR; station FE + year FE)      0.0327      0.0124   35039
+(results {stata estimates replay control_southeastern:control_southeastern} are active now)
+       Operator control (Southeastern; station FE + year FE)      0.0327      0.0181   23820
+(results {stata estimates replay ring_500:ring_500} are active now)
+                              Ring radius (<500m vs 1.5-3km)      0.0232      0.0143   29050
+(results {stata estimates replay ring_1500:ring_1500} are active now)
+                             Ring radius (<1.5km vs 1.5-3km)      0.0174      0.0088   53476
+(results {stata estimates replay oa_fe:oa_fe} are active now)
+                                                       OA FE      0.0274      0.0117   46161
+(results {stata estimates replay station_ring_fe:station_ring_fe} are active now)
+     Station x ring FE (500m bins; pre/post supported cells)      0.0279      0.0123   47235
+(results {stata estimates replay post_covid:post_covid} are active now)
+                                            Post-2023 sample      0.0284      0.0126   32670
+(results {stata estimates replay placebo_2018:placebo_2018} are active now)
+                  Placebo treatment date (Jan 2018-Dec 2020)      0.0005      0.0157   21426
+(results {stata estimates replay composition_placebo:composition_placebo} are active now)
+                       Composition placebo (predicted price)     -0.0023      0.0025   42865
+(results {stata estimates replay fare_zone:fare_zone} are active now)
+                             Fare zone heterogeneity (inner)      0.0199      0.0136   42865
+(results {stata estimates replay fare_zone:fare_zone} are active now)
+                             Fare zone heterogeneity (outer)      0.0380      0.0148   42865
+(results {stata estimates replay tx_volume:tx_volume} are active now)
+                       Transaction volume (log transactions)     -0.0326      0.0245   10234
+
+{com}. 
+. * ============================================================================
+. * CLEAN UP
+. * ============================================================================
+. 
+. quietly {c -(}
+{txt}
+{com}. 
+{txt}end of do-file
+
+{com}. log close
+      {txt}name:  {res}<unnamed>
+       {txt}log:  {res}/Users/wyt/Desktop/Stata log.smcl
+  {txt}log type:  {res}smcl
+ {txt}closed on:  {res} 3 May 2026, 11:56:13
+{txt}{.-}
+{smcl}
+{txt}{sf}{ul off}

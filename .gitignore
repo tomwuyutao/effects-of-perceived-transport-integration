@@ -1,0 +1,31 @@
+# Data files
+input/*
+!input/control_NR_stations.csv
+!input/station_fare_zones.csv
+output/
+Data to add/
+Stata/V1/*.dta
+Stata/V2/*.dta
+*.dta
+*.csv
+!input/station_fare_zones.csv
+*.xlsx
+*.xls
+*.ods
+*.shp
+*.dbf
+*.shx
+*.prj
+
+# Output images
+*.png
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Temp files
+temp_*.dta
+~$*
