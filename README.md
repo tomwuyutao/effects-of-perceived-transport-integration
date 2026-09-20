@@ -1,20 +1,26 @@
-# README
+# Effects of Perceived Transport Integration
 
-## Folder structure
+## Research overview
+
+This dissertation asks whether making existing transport links more visible can change housing valuations even when the underlying service does not improve. It uses the January 2021 addition of Thameslink to the London Tube map as a natural experiment: 47 stations appeared on the map, but no new infrastructure was built and no major service improvement occurred.
+
+Using HM Land Registry transactions and a difference-in-differences design, I compare properties within 1 km of treated stations with properties in a 1.5-3 km ring around the same stations. The map change is associated with a statistically significant **2.8% increase in house prices** near treated stations. The result is robust to alternative controls and specifications, is larger in outer fare zones (3.8%) than inner zones (2.0%), and is not accompanied by a detectable change in transaction volume. The findings suggest that transport visibility and informational salience can affect high-stakes housing decisions.
+
+## Repository structure
 
 `input` contains raw data sources. Note that the data source files are almost 10 GB, so I did not upload `input`.
 
-`build.ipynb` read the data files from `input`, clean them, build the datasets, then export the datasets to `output` as .dta files. I also did not upload `output` due to large file sizes.
+`Build.ipynb` reads the data files from `input`, cleans them, builds the datasets, then exports the datasets to `output` as `.dta` files. I also did not upload `output` due to large file sizes.
 
-`analysis.do` then read the .dta files from `output` and run regressions.
+`Analysis.do` reads the `.dta` files from `output` and runs the regressions.
 
-Note that some descriptive statistics tables and figures are produced in `build.ipynb`, some are in `analysis.do`. All regression tables are produced in `analysis.do`.
+Some descriptive-statistics tables and figures are produced in `Build.ipynb`; all regression tables are produced in `Analysis.do`.
 
-I have added titles and comments in both `build.ipynb` and `analysis.do` to indicate parts of the code that produces tables/figures for the dissertation. You can also look at the table below for the exact lines of code to look at.
+Titles and comments in both files identify the code that produces each dissertation table and figure. The tables below provide exact locations.
 
-`Stata log.smcl` is the log of running analysis.do. Note that the log and output of `build.ipynb` can be viewed directly in the `.ipynb` file, so I haven't attached a dedicated log for that. 
+`Stata log.smcl` records the execution of `Analysis.do`. The output of `Build.ipynb` can be viewed directly in the notebook.
 
-Github displays the cell number of the `.ipynb` file, for example, In [25] at the left of each cell denotes cell number 25. That's how I will be referring to the part of the `.ipynb` file used to produce tables and figures. 
+GitHub displays notebook cell numbers (for example, `In [25]`); the reproduction guide refers to those numbers.
 
 ## Tables Reproduction
 
