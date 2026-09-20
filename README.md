@@ -1,7 +1,5 @@
 # README
 
-Note: This README contains tables in markdown syntax. If you cannot render these tables in markdown, you can view the README.pdf file in my submission, which is already formatted.
-
 ## Folder structure
 
 `input` contains raw data sources. Note that the data source files are almost 10 GB, so I did not upload `input`.
